@@ -59,9 +59,10 @@ brings it into existence as a side effect.
    | `Commands` | `deskctl` |
    | `License` | `MIT` |
 
-   `PackageIdentifier` is case sensitive — it maps to the `manifests/d/deskctl/deskctl` path in
-   `winget-pkgs`. The `winget` job passes it to `wingetcreate update`, which finds nothing if the
-   case differs, so the two have to be changed together or not at all.
+   `PackageIdentifier` maps to the `manifests/d/deskctl/deskctl` path in `winget-pkgs`, and the
+   value in the manifest matches that path exactly. `wingetcreate` matches it case insensitively
+   and resolves it back to the published spelling, so the `winget` job keeps working whatever case
+   it passes.
 
    `Commands` is what users type. Without it winget derives the alias from the asset filename,
    which is `deskctl.exe` and so happens to give the right answer today — setting it explicitly is
