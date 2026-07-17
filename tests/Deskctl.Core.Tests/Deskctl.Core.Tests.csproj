@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- Test assemblies use reflection by design; AOT analysis does not apply. -->
+    <IsAotCompatible>false</IsAotCompatible>
+    <!-- xunit.v3 self-hosts on Microsoft Testing Platform; the test binary is its own runner,
+         so no VSTest adapter package is involved. -->
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Deskctl.Core/Deskctl.Core.csproj" />
+  </ItemGroup>
+</Project>

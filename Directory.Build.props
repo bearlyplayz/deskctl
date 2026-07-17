@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+
+    <!-- Surfaces trim/AOT incompatibilities as build warnings (and therefore errors)
+         in every project, rather than as a runtime failure after publish. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # release notes are generated from history since the previous tag
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # The tag is the version. v1.2.3 -> 1.2.3, which stamps the assembly and so `deskctl --version`.
+      - id: version
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}' -replace '^v', ''
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Tag '${{ github.ref_name }}' is not vMAJOR.MINOR.PATCH" }
+          "value=$v" >> $env:GITHUB_OUTPUT
+
+      - run: dotnet test -c Release
+
+      - run: dotnet publish src/Deskctl/Deskctl.csproj -c Release -p:Version=${{ steps.version.outputs.value }} -o publish
+
+      - shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create '${{ github.ref_name }}' publish/deskctl.exe --generate-notes
+
+  # Submits an update PR to microsoft/winget-pkgs. Requires a fork of that repository owned by
+  # this repository's owner, and WINGET_TOKEN as a classic PAT with `public_repo` scope —
+  # fine-grained tokens and GITHUB_TOKEN are both rejected. The action fails unless
+  # Deskctl.Deskctl already exists in winget-pkgs; the first version is submitted by hand.
+  # A release created with GITHUB_TOKEN raises no events, so `on: release` never fires here.
+  winget:
+    needs: release
+    if: vars.PUBLISH_WINGET == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: Deskctl.Deskctl
+          installers-regex: 'deskctl\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}

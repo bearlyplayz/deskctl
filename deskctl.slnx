@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Deskctl.Core/Deskctl.Core.csproj" />
+    <Project Path="src/Deskctl.Platform/Deskctl.Platform.csproj" />
+    <Project Path="src/Deskctl/Deskctl.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Deskctl.Core.Tests/Deskctl.Core.Tests.csproj" />
+  </Folder>
+</Solution>
