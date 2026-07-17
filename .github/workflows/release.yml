@@ -51,7 +51,7 @@ jobs:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
           Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe update Deskctl.Deskctl `
+          .\wingetcreate.exe update deskctl.deskctl `
             --version '${{ needs.release.outputs.version }}' `
             --urls 'https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/deskctl.exe' `
             --submit --no-open --token $env:WINGET_TOKEN

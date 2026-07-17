@@ -54,10 +54,14 @@ brings it into existence as a side effect.
 
    | Field | Value |
    |---|---|
-   | `PackageIdentifier` | `Deskctl.Deskctl` |
+   | `PackageIdentifier` | `deskctl.deskctl` |
    | `InstallerType` | `portable` |
    | `Commands` | `deskctl` |
    | `License` | `MIT` |
+
+   `PackageIdentifier` is case sensitive — it maps to the `manifests/d/deskctl/deskctl` path in
+   `winget-pkgs`. The `winget` job passes it to `wingetcreate update`, which finds nothing if the
+   case differs, so the two have to be changed together or not at all.
 
    `Commands` is what users type. Without it winget derives the alias from the asset filename,
    which is `deskctl.exe` and so happens to give the right answer today — setting it explicitly is
@@ -77,7 +81,7 @@ brings it into existence as a side effect.
 The `winget` job downloads `wingetcreate` and runs the equivalent of:
 
 ```powershell
-wingetcreate update Deskctl.Deskctl --version 1.2.3 `
+wingetcreate update deskctl.deskctl --version 1.2.3 `
   --urls 'https://github.com/bearlyplayz/deskctl/releases/download/v1.2.3/deskctl.exe' `
   --submit --no-open --token <WINGET_TOKEN>
 ```
