@@ -121,6 +121,78 @@ internal sealed class DeskctlTools
             };
         });
 
+    [McpServerTool(Name = "record")]
+    [Description("""
+        Capture a short burst of frames to disk so you can SEE motion a single capture cannot show:
+        whether something is animating, loading, frozen, or still changing — spinners, progress
+        bars, video, transitions.
+
+        Frames are written to outputDir as ordered files (frame_000.png, frame_001.png, …). This
+        tool returns the file paths, NOT the images — read the frames you want with your image
+        tools. To read the motion cheaply, open the FIRST, a MIDDLE, and the LAST frame; open more
+        only if you need finer detail. If every frame looks identical, the region is either static
+        or was sampled at its own cycle — re-run with a different preset to tell which.
+
+        Crop to just the animated area with 'region': a small crop keeps each frame legible and
+        cheap to read. Pick the preset to match the motion — a curated rate/duration pairing, so a
+        burst is always small (at most 30 frames):
+          slow    — 3fps over 10s: gradual changes, progress, loading
+          medium  — 6fps over 5s: general motion
+          fast    — 9fps over 1s: spinners, quick transitions (default)
+          instant — 12fps over 0.5s: very fast motion
+        """)]
+    public static async Task<CallToolResult> RecordAsync(
+        [Description("What to capture: 'monitor:<id>' or 'win:<hwnd>'. Get monitor ids from the doctor tool.")]
+        string target,
+        [Description("Directory to write the frames into. Created if it does not exist.")]
+        string outputDir,
+        [Description("Which rate/duration to use: slow, medium, fast (default), or instant.")]
+        RecordPreset preset = RecordPreset.Fast,
+        [Description("Optional sub-rectangle within the target, as x,y,w,h. Crop to the animated area.")]
+        string? region = null,
+        [Description("Downscale each frame so width does not exceed this.")]
+        int? maxWidth = null,
+        [Description("Downscale each frame so height does not exceed this.")]
+        int? maxHeight = null,
+        [Description("'png' (default) or 'jpeg'. PNG is lossless; downscale with maxWidth to spend less.")]
+        string format = "png",
+        [Description("JPEG quality, 1-100. Ignored for PNG.")]
+        int quality = 90,
+        CancellationToken ct = default)
+        => await ReportingCallerErrors(async () =>
+        {
+            using RecordCommand command = new();
+            RecordResult result = await command.RunAsync(
+                new RecordInput(
+                    Frame.Parse(target),
+                    outputDir,
+                    preset,
+                    string.IsNullOrEmpty(region) ? null : CropBox.Parse(region),
+                    maxWidth,
+                    maxHeight,
+                    ParseFormat(format),
+                    quality),
+                ct);
+
+            string structured = DeskctlJson.Serialize(result);
+
+            // Paths and guidance as text, not the images: the frames live on disk so the caller
+            // pulls only the ones it needs into context. A caller told nothing about ordering
+            // would read frames blind, so the reading strategy rides along with the manifest.
+            string guidance =
+                $"Recorded {result.Files.Count} frames to {outputDir} in capture order. " +
+                "Read the FIRST, a MIDDLE, and the LAST frame to see the motion; open more only if " +
+                "you need finer detail. If they look identical, the region is static or was sampled " +
+                "at its own cycle — re-run with a different preset.\n" +
+                string.Join('\n', result.Files);
+
+            return new CallToolResult
+            {
+                Content = [new TextContentBlock { Text = guidance }],
+                StructuredContent = JsonDocument.Parse(structured).RootElement,
+            };
+        });
+
     /// <summary>
     /// Rejects an unrecognized format rather than defaulting to PNG, so a caller that asks for
     /// something this does not encode is told, not quietly handed a different format.

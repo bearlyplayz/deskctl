@@ -30,11 +30,25 @@ internal static class CliRoot
         _ => throw new ArgumentException($"Unknown format '{value}'. Use 'png' or 'jpeg'."),
     };
 
+    /// <summary>
+    /// Rejects an unrecognized preset rather than defaulting, so a typo is reported instead of
+    /// quietly recording a different rate and duration than the one asked for.
+    /// </summary>
+    private static RecordPreset ParsePreset(string? value) => value?.ToLowerInvariant() switch
+    {
+        "slow" => RecordPreset.Slow,
+        "medium" => RecordPreset.Medium,
+        "fast" or null => RecordPreset.Fast,
+        "instant" => RecordPreset.Instant,
+        _ => throw new ArgumentException($"Unknown preset '{value}'. Use slow, medium, fast, or instant."),
+    };
+
     internal static async Task<int> InvokeAsync(string[] args)
     {
         RootCommand root = new("deskctl — desktop capture, input, and UI automation");
         root.Subcommands.Add(BuildDoctor());
         root.Subcommands.Add(BuildCapture());
+        root.Subcommands.Add(BuildRecord());
         root.Subcommands.Add(BuildWindows());
         root.Subcommands.Add(BuildInput());
         root.Subcommands.Add(BuildSnapshot());
@@ -160,6 +174,84 @@ internal static class CliRoot
         });
 
         return capture;
+    }
+
+    private static Command BuildRecord()
+    {
+        Option<string> targetOption = new("--target")
+        {
+            Description = "What to capture: monitor:<id> or win:<hwnd>",
+            Required = true,
+        };
+        Option<string> outDirOption = new("--out-dir")
+        {
+            Description = "Directory to write the frames into (created if absent)",
+            Required = true,
+        };
+        Option<string> presetOption = new("--preset")
+        {
+            Description = "slow (3fps/10s), medium (6fps/5s), fast (9fps/1s), or instant (12fps/0.5s)",
+            DefaultValueFactory = _ => "fast",
+        };
+        Option<string?> regionOption = new("--region")
+        {
+            Description = "Sub-rectangle within the target, as x,y,w,h. Crop to the animated area.",
+        };
+        Option<int?> maxWidthOption = new("--max-width")
+        {
+            Description = "Downscale each frame so width does not exceed this.",
+        };
+        Option<int?> maxHeightOption = new("--max-height")
+        {
+            Description = "Downscale each frame so height does not exceed this.",
+        };
+        Option<string> formatOption = new("--format")
+        {
+            Description = "png (default) or jpeg.",
+            DefaultValueFactory = _ => "png",
+        };
+        Option<int> qualityOption = new("--quality")
+        {
+            Description = "JPEG quality 1-100. Ignored for PNG.",
+            DefaultValueFactory = _ => 90,
+        };
+
+        Command record = new("record", "Capture a short burst of frames to disk to see motion")
+        {
+            targetOption, outDirOption, presetOption, regionOption,
+            maxWidthOption, maxHeightOption, formatOption, qualityOption,
+        };
+
+        record.SetAction(async (parseResult, ct) =>
+        {
+            string? region = parseResult.GetValue(regionOption);
+
+            RecordInput input = new(
+                Target: Frame.Parse(parseResult.GetValue(targetOption)!),
+                OutputDir: parseResult.GetValue(outDirOption)!,
+                Preset: ParsePreset(parseResult.GetValue(presetOption)),
+                Region: string.IsNullOrEmpty(region) ? null : CropBox.Parse(region),
+                MaxWidth: parseResult.GetValue(maxWidthOption),
+                MaxHeight: parseResult.GetValue(maxHeightOption),
+                Format: ParseFormat(parseResult.GetValue(formatOption)),
+                Quality: parseResult.GetValue(qualityOption));
+
+            using RecordCommand command = new();
+            RecordResult result = await command.RunAsync(input, ct);
+
+            Console.WriteLine(
+                $"frame {result.Rect.Frame}  origin {result.Rect.OriginX},{result.Rect.OriginY}  " +
+                $"size {result.Rect.W}x{result.Rect.H}  scale {result.Rect.Scale}  " +
+                $"{result.Files.Count} frames");
+            foreach (string path in result.Files)
+            {
+                Console.WriteLine(path);
+            }
+
+            return 0;
+        });
+
+        return record;
     }
 
     private static Command BuildWindows()
