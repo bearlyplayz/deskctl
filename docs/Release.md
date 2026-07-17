@@ -31,7 +31,16 @@ package exists there. The first version has to be submitted by hand, because
 ### One-time setup
 
 1. **Fork `microsoft/winget-pkgs`** under the same account that owns this repository. The action
-   pushes its branch to that fork and opens a cross-repository PR from it.
+   pushes its branch to that fork and opens a cross-repository PR from it, and it does not create
+   the fork for you.
+
+   This requirement is not in Microsoft's manifest documentation, which describes the YAML schema
+   rather than how a submission reaches the repository. It comes from
+   [winget-pkgs CONTRIBUTING.md](https://github.com/microsoft/winget-pkgs/blob/master/CONTRIBUTING.md)
+   ("First, fork the repository to your own GitHub account") and from
+   [winget-releaser](https://github.com/vedantmgoyal9/winget-releaser), which requires the fork to
+   sit under the release repository's owner unless its `fork-user` input says otherwise. Nobody has
+   write access to `microsoft/winget-pkgs`, so every contribution is a PR from a fork.
 
 2. **Create a classic Personal Access Token** with the `public_repo` scope, and add it to this
    repository as the secret `WINGET_TOKEN`. Fine-grained tokens do not work — the action rejects
