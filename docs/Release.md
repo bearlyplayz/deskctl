@@ -23,35 +23,30 @@ version that `deskctl --version` would report incorrectly.
 
 ## Publishing to winget
 
-The release workflow can submit each new version to
-[microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) automatically, but only once the
-package exists there. The first version has to be submitted by hand, because
-`winget-releaser` refuses to create a package that is not already present.
+The release workflow submits each new version to
+[microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) with
+[`wingetcreate`](https://github.com/microsoft/winget-create), Microsoft's own manifest tool. It can
+only do so once the package exists there: `wingetcreate update` edits an existing package and will
+not create one, so the first version is submitted by hand.
 
 ### One-time setup
 
-1. **Fork `microsoft/winget-pkgs`** under the same account that owns this repository. The action
-   pushes its branch to that fork and opens a cross-repository PR from it, and it does not create
-   the fork for you.
+Nobody has write access to `microsoft/winget-pkgs`, so every submission is a pull request from a
+fork of it owned by the submitter. There is no need to create that fork by hand — `wingetcreate`
+looks for it and forks the repository itself when it is absent, so the first submission below
+brings it into existence as a side effect.
 
-   This requirement is not in Microsoft's manifest documentation, which describes the YAML schema
-   rather than how a submission reaches the repository. It comes from
-   [winget-pkgs CONTRIBUTING.md](https://github.com/microsoft/winget-pkgs/blob/master/CONTRIBUTING.md)
-   ("First, fork the repository to your own GitHub account") and from
-   [winget-releaser](https://github.com/vedantmgoyal9/winget-releaser), which requires the fork to
-   sit under the release repository's owner unless its `fork-user` input says otherwise. Nobody has
-   write access to `microsoft/winget-pkgs`, so every contribution is a PR from a fork.
+1. **Create a classic Personal Access Token** with the `public_repo` scope, and add it to this
+   repository as the secret `WINGET_TOKEN`. Fine-grained tokens do not work. The built-in
+   `GITHUB_TOKEN` cannot be used either: it cannot push to a fork of a repository owned by someone
+   else.
 
-2. **Create a classic Personal Access Token** with the `public_repo` scope, and add it to this
-   repository as the secret `WINGET_TOKEN`. Fine-grained tokens do not work — the action rejects
-   them. The built-in `GITHUB_TOKEN` cannot be used either: it cannot push to a fork of a
-   repository owned by someone else.
-
-3. **Submit the first version manually.** Cut a normal release first, then point `wingetcreate` at
+2. **Submit the first version by hand.** Cut a normal release first, then point `wingetcreate` at
    its asset:
 
    ```powershell
    winget install Microsoft.WingetCreate
+   wingetcreate token          # stores the PAT from step 1 locally
    wingetcreate new https://github.com/bearlyplayz/deskctl/releases/download/v1.2.3/deskctl.exe
    ```
 
@@ -73,12 +68,21 @@ package exists there. The first version has to be submitted by hand, because
    (a bot comments on the PR explaining how), and a human moderator reviews it. Expect this to
    take days rather than minutes, and expect more scrutiny than later versions get.
 
-4. **Once that PR is merged**, set the repository variable `PUBLISH_WINGET` to `true`. Every
+3. **Once that PR is merged**, set the repository variable `PUBLISH_WINGET` to `true`. That is what
+   enables the `winget` job; until it is set, the job is skipped and releases stay green. Every
    subsequent tag then submits its own update PR with no further work.
 
 ### What to expect afterwards
 
-Each release opens a PR against `winget-pkgs` that is usually merged by automated validation
-without a human involved. The binary is unsigned, which winget permits, but SmartScreen scores an
+The `winget` job downloads `wingetcreate` and runs the equivalent of:
+
+```powershell
+wingetcreate update Deskctl.Deskctl --version 1.2.3 `
+  --urls 'https://github.com/bearlyplayz/deskctl/releases/download/v1.2.3/deskctl.exe' `
+  --submit --no-open --token <WINGET_TOKEN>
+```
+
+It rehashes the installer from that URL and opens a PR, which is usually merged by automated
+validation without a human involved. The binary is unsigned, which winget permits, but SmartScreen scores an
 unsigned executable's reputation from zero on every new version, so a release can occasionally be
 held for a moderator. That is a delay, not a rejection.
