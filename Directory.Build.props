@@ -7,6 +7,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 
+    <!-- Keeps AssemblyInformationalVersion at the bare version. Left on, a build inside a git
+         checkout appends the commit sha as build metadata, which the CLI then prints. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
     <!-- Surfaces trim/AOT incompatibilities as build warnings (and therefore errors)
          in every project, rather than as a runtime failure after publish. -->
     <IsAotCompatible>true</IsAotCompatible>
