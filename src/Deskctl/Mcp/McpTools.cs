@@ -78,10 +78,8 @@ internal sealed class DeskctlTools
         [Description("Downscale so height does not exceed this. The result's scale records the factor.")]
         int? maxHeight = null,
         [Description(
-            "'png' (default) or 'jpeg'. PNG is lossless and is what you want: image cost tracks " +
-            "pixel dimensions, not bytes, so a smaller JPEG buys nothing and its artifacts blur " +
-            "the small text a capture exists to make readable. Downscale with maxWidth to spend " +
-            "less. Use jpeg only when bytes genuinely cost something.")]
+            "'png' (default, lossless — what you want; cost tracks pixels not bytes) or 'jpeg'. " +
+            "Downscale with maxWidth to spend less; use jpeg only when bytes genuinely cost.")]
         string format = "png",
         [Description("JPEG quality, 1-100. Ignored for PNG.")]
         int quality = 90,
@@ -110,11 +108,7 @@ internal sealed class DeskctlTools
             {
                 Content =
                 [
-                    new ImageContentBlock
-                    {
-                        Data = result.Bytes,
-                        MimeType = result.MimeType,
-                    },
+                    ImageContentBlock.FromBytes(result.Bytes, result.MimeType),
                     new TextContentBlock { Text = rect },
                 ],
                 StructuredContent = JsonDocument.Parse(rect).RootElement,
@@ -122,31 +116,20 @@ internal sealed class DeskctlTools
         });
 
     [McpServerTool(Name = "record")]
-    [Description("""
-        Capture a short burst of frames to disk so you can SEE motion a single capture cannot show:
-        whether something is animating, loading, frozen, or still changing — spinners, progress
-        bars, video, transitions.
-
-        Frames are written to outputDir as ordered files (frame_000.png, frame_001.png, …). This
-        tool returns the file paths, NOT the images — read the frames you want with your image
-        tools. To read the motion cheaply, open the FIRST, a MIDDLE, and the LAST frame; open more
-        only if you need finer detail. If every frame looks identical, the region is either static
-        or was sampled at its own cycle — re-run with a different preset to tell which.
-
-        Crop to just the animated area with 'region': a small crop keeps each frame legible and
-        cheap to read. Pick the preset to match the motion — a curated rate/duration pairing, so a
-        burst is always small (at most 30 frames):
-          slow    — 3fps over 10s: gradual changes, progress, loading
-          medium  — 6fps over 5s: general motion
-          fast    — 9fps over 1s: spinners, quick transitions (default)
-          instant — 12fps over 0.5s: very fast motion
-        """)]
+    [Description(
+        "Capture a burst of frames to disk to SEE motion a single capture cannot — animating, " +
+        "loading, frozen, or done. Writes ordered files (frame_000.png…) to outputDir and returns " +
+        "their filenames, not the images; read them with your image tools (first/middle/last is " +
+        "usually enough). Crop to the moving area with 'region'. The preset picks rate/duration " +
+        "(≤30 frames); identical frames mean static or mis-sampled — retry another preset.")]
     public static async Task<CallToolResult> RecordAsync(
         [Description("What to capture: 'monitor:<id>' or 'win:<hwnd>'. Get monitor ids from the doctor tool.")]
         string target,
         [Description("Directory to write the frames into. Created if it does not exist.")]
         string outputDir,
-        [Description("Which rate/duration to use: slow, medium, fast (default), or instant.")]
+        [Description(
+            "Rate/duration to match the motion: slow (3fps/10s, loading), medium (6fps/5s, " +
+            "general), fast (9fps/1s, spinners — default), instant (12fps/0.5s, very fast).")]
         RecordPreset preset = RecordPreset.Fast,
         [Description("Optional sub-rectangle within the target, as x,y,w,h. Crop to the animated area.")]
         string? region = null,
@@ -174,17 +157,22 @@ internal sealed class DeskctlTools
                     quality),
                 ct);
 
-            string structured = DeskctlJson.Serialize(result);
+            // Report frames as bare filenames against the caller's own outputDir, not absolute
+            // paths: the shared directory prefix repeated once per frame is the bulk of this
+            // result's size, and the caller already passed outputDir in. Filenames stay in
+            // capture order, matching the frame_NNN names on disk.
+            IReadOnlyList<string> names = result.Files.Select(Path.GetFileName).ToList()!;
+            string structured = DeskctlJson.Serialize(result with { Files = names });
 
-            // Paths and guidance as text, not the images: the frames live on disk so the caller
-            // pulls only the ones it needs into context. A caller told nothing about ordering
-            // would read frames blind, so the reading strategy rides along with the manifest.
+            // Guidance as text, not the images: the frames live on disk so the caller pulls only
+            // the ones it needs into context. A caller told nothing about ordering would read
+            // frames blind, so the reading strategy rides along with the manifest.
             string guidance =
-                $"Recorded {result.Files.Count} frames to {outputDir} in capture order. " +
+                $"Recorded {names.Count} frames to {outputDir} in capture order, " +
+                $"from {names[0]} to {names[^1]}. " +
                 "Read the FIRST, a MIDDLE, and the LAST frame to see the motion; open more only if " +
                 "you need finer detail. If they look identical, the region is static or was sampled " +
-                "at its own cycle — re-run with a different preset.\n" +
-                string.Join('\n', result.Files);
+                "at its own cycle — re-run with a different preset.";
 
             return new CallToolResult
             {
@@ -267,40 +255,31 @@ internal sealed class DeskctlTools
 
     [McpServerTool(Name = "input")]
     [Description("""
-        Send mouse and keyboard steps as one atomic batch. Steps with no delay coalesce into a
-        single OS call that other input cannot interleave with, which is what makes cross-device
-        combos and real drags work.
-
-        Steps are a JSON array. down/up/press take EITHER "key" OR "button" — the tag is required
-        because 'left' and 'right' are both mouse buttons and arrow keys:
-          {"down":{"key":"ctrl"}}                              hold a key
-          {"press":{"key":"c"}}                                tap a key
-          {"press":{"button":"left","to":"elem:row-1"}}        click something
-          {"move":{"to":"win:123@400,200","over":"250ms"}}     move with real motion
-          {"scroll":{"dy":-3,"at":"elem:list"}}                scroll
-          {"text":"hello"}                                     type literal text
-
-        A point is "<frame>@<x>,<y>", or just "<frame>" for its centre.
-
-        Anything you leave held is released automatically, newest first, and reported back in
-        'released'. That release is real input: a dangling "win" will open the Start menu. Emit
-        your own 'up' steps.
-
-        Drag example — the move must be timed, or the app sees a click rather than a drag:
-          [{"move":{"to":"elem:tab-3"}},
-           {"down":{"button":"left"}},
-           {"move":{"to":"win:123@400,200","over":"250ms","ease":"easeOut"}},
-           {"up":{"button":"left"}}]
+        Send mouse/keyboard as one atomic JSON-array batch; zero-delay steps coalesce into a single
+        OS call, which is what makes real drags and cross-device combos work. Each step is one verb:
+          {"down":{"key":"ctrl"}} / {"up":{...}} / {"press":{"button":"left","to":"elem:row-1"}}
+          {"move":{"to":"win:123@400,200","over":"250ms","ease":"easeOut"}}
+          {"scroll":{"dy":-3,"at":"elem:list"}}  {"text":"hi"}  {"invoke":{"target":"elem:x"}}
+          {"fill":{"target":"elem:x","value":"y"}}  {"waitFor":{...}}  {"delay":{...}}
+        down/up/press need "key" OR "button" (tag required — 'left'/'right' are both). A point is
+        "<frame>@<x>,<y>", or "<frame>" for its centre. A drag's move must have a timed "over" or the
+        app sees a click. Anything left held auto-releases newest-first and is reported in 'released'
+        — a dangling "win" opens the Start menu, so emit your own 'up'.
         """)]
     public static async Task<InputResult> InputAsync(
         [Description("The JSON array of steps.")] JsonElement steps,
         CancellationToken ct = default)
         => await ReportingCallerErrors(() =>
         {
+            // A client may send the array as-is or as a JSON string holding the array text;
+            // an untyped tool-schema parameter leaves the choice to the client. Unwrap the
+            // string form so both reach the parser as array text.
+            string raw = steps.ValueKind == JsonValueKind.String ? steps.GetString()! : steps.GetRawText();
+
             // Re-serialized rather than JsonElement.Deserialize'd: that overload needs a
             // JsonTypeInfo under NativeAOT, and the source-generated context is reachable only
             // by type.
-            List<Step>? parsed = DeskctlJson.Deserialize<List<Step>>(steps.GetRawText());
+            List<Step>? parsed = DeskctlJson.Deserialize<List<Step>>(raw);
             if (parsed is null || parsed.Count == 0)
             {
                 throw new ArgumentException("No steps to run.", nameof(steps));
