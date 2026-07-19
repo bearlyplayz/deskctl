@@ -1,4 +1,4 @@
-# Building deskctl
+# Building windeskctl
 
 ## Prerequisites
 
@@ -35,18 +35,18 @@ Tests are xunit.v3 on Microsoft Testing Platform. The test binary is its own run
 VSTest adapter — so the filter syntax differs from what you may be used to:
 
 ```powershell
-dotnet test tests/Deskctl.Core.Tests --filter-method '*Translate*'
-dotnet test tests/Deskctl.Core.Tests --filter-class '*ScreenCoordsTests'
+dotnet test tests/WinDeskCtl.Core.Tests --filter-method '*Translate*'
+dotnet test tests/WinDeskCtl.Core.Tests --filter-class '*ScreenCoordsTests'
 ```
 
-Only `Deskctl.Core` has tests. `Deskctl.Platform` is untested by design — it is P/Invoke and WinRT
-against a live desktop, and `deskctl doctor` is its runtime check.
+Only `WinDeskCtl.Core` has tests. `WinDeskCtl.Platform` is untested by design — it is P/Invoke and WinRT
+against a live desktop, and `windeskctl doctor` is its runtime check.
 
 ## Run what you built
 
 ```powershell
-dotnet run --project src/Deskctl -- doctor
-dotnet run --project src/Deskctl -- windows list
+dotnet run --project src/WinDeskCtl -- doctor
+dotnet run --project src/WinDeskCtl -- windows list
 ```
 
 `doctor` is the fastest confirmation that a build works against your machine: it measures display
@@ -80,6 +80,6 @@ suppression here becomes a runtime failure in the AOT-published binary, where JI
 for it.
 
 **A green build is not proof the MCP server starts.** Every type crossing JSON must be listed in
-`Core/Json/DeskctlJsonContext.cs`, in the same commit that introduces it. MCP builds its tool
+`Core/Json/WinDeskCtlJsonContext.cs`, in the same commit that introduces it. MCP builds its tool
 schemas at startup, so an unlisted type takes the server down entirely — and only in the published
 binary, since JIT hides it under `dotnet run`. The compiler will not catch this for you.

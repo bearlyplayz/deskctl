@@ -1,17 +1,17 @@
-# deskctl
+# windeskctl
 
 Desktop capture, input, and UI automation for Windows. One binary, two surfaces: a CLI and an
 MCP stdio server over the same commands.
 
 ## Install
 
-Download `deskctl.exe` from the [latest release](../../releases/latest) and put it anywhere on your
+Download `windeskctl.exe` from the [latest release](../../releases/latest) and put it anywhere on your
 `PATH`. It is a single self-contained binary — there is no installer and no .NET runtime to
 install alongside it.
 
 ## Requirements
 
-To *run* deskctl: Windows 10 1903+ (Windows.Graphics.Capture). Nothing else — the released binary
+To *run* windeskctl: Windows 10 1903+ (Windows.Graphics.Capture). Nothing else — the released binary
 carries its own runtime.
 
 To *build* it from source:
@@ -28,33 +28,33 @@ To *build* it from source:
 ```powershell
 dotnet build
 dotnet test
-dotnet publish src/Deskctl/Deskctl.csproj -c Release
+dotnet publish src/WinDeskCtl/WinDeskCtl.csproj -c Release
 ```
 
 ## Use
 
 ```powershell
-deskctl doctor                                  # self-test against this machine
-deskctl doctor --json                           # machine-readable
-deskctl doctor --intrusive                      # adds checks that steal focus and pop Start
+windeskctl doctor                                  # self-test against this machine
+windeskctl doctor --json                           # machine-readable
+windeskctl doctor --intrusive                      # adds checks that steal focus and pop Start
 
-deskctl windows list --title notepad            # DWM-accurate geometry, not GetWindowRect
-deskctl windows move 12345 --x 100 --y -1000    # --x/--y are the VISIBLE edges
-deskctl windows resize 12345 --width 800 --height 600
-deskctl windows focus 12345
-deskctl windows minimize 12345                  # also: maximize, restore
+windeskctl windows list --title notepad            # DWM-accurate geometry, not GetWindowRect
+windeskctl windows move 12345 --x 100 --y -1000    # --x/--y are the VISIBLE edges
+windeskctl windows resize 12345 --width 800 --height 600
+windeskctl windows focus 12345
+windeskctl windows minimize 12345                  # also: maximize, restore
 
-deskctl capture --target monitor:1 --out shot.png
-deskctl capture --target win:12345 --region 0,0,400,300 --max-width 1280
-deskctl capture --target win:12345 --format jpeg --quality 75 --out shot.jpg
+windeskctl capture --target monitor:1 --out shot.png
+windeskctl capture --target win:12345 --region 0,0,400,300 --max-width 1280
+windeskctl capture --target win:12345 --format jpeg --quality 75 --out shot.jpg
 
-deskctl snapshot win:12345                      # UI element tree
-deskctl snapshot win:12345 --json --max-depth 6
+windeskctl snapshot win:12345                      # UI element tree
+windeskctl snapshot win:12345 --json --max-depth 6
 
-deskctl input '[{"down":{"key":"ctrl"}},{"press":{"key":"c"}},{"up":{"key":"ctrl"}}]'
-deskctl input --snapshot win:12345 '[{"invoke":{"target":"elem:btn-save"}}]'
+windeskctl input '[{"down":{"key":"ctrl"}},{"press":{"key":"c"}},{"up":{"key":"ctrl"}}]'
+windeskctl input --snapshot win:12345 '[{"invoke":{"target":"elem:btn-save"}}]'
 
-deskctl mcp                                     # serve MCP over stdio
+windeskctl mcp                                     # serve MCP over stdio
 ```
 
 Every command takes a frame-qualified target, so an image and a click can never disagree about
@@ -71,7 +71,7 @@ dimensions, not bytes, so downscaling saves tokens and `--format jpeg` saves non
 sets `scale` in the returned rect rather than rescaling silently. JPEG is there for when bytes
 genuinely cost something, such as writing to disk.
 
-Register the MCP server with a client by pointing it at `deskctl.exe` with the `mcp` argument.
+Register the MCP server with a client by pointing it at `windeskctl.exe` with the `mcp` argument.
 It exposes the same commands as tools: `doctor`, `windows`, `window_action`, `capture`,
 `snapshot`, `input`. There is no port and no socket: the transport is stdio, so the OS process
 boundary is the security model.
@@ -84,10 +84,10 @@ so a CLI `snapshot` in one process cannot be referenced by a separate `input` pr
 
 | Project | Target | Rule |
 |---|---|---|
-| `src/Deskctl.Core` | `net10.0` | Pure. Frames, coordinate maths, command contracts. Cannot reference Win32 — the TFM enforces it. |
-| `src/Deskctl.Platform` | `net10.0-windows` | Every P/Invoke and WinRT call. |
-| `src/Deskctl` | `net10.0-windows` | The `deskctl` binary: CLI and MCP adapters only. |
-| `tests/Deskctl.Core.Tests` | `net10.0` | Unit tests. No mocks — Core has nothing to mock. |
+| `src/WinDeskCtl.Core` | `net10.0` | Pure. Frames, coordinate maths, command contracts. Cannot reference Win32 — the TFM enforces it. |
+| `src/WinDeskCtl.Platform` | `net10.0-windows` | Every P/Invoke and WinRT call. |
+| `src/WinDeskCtl` | `net10.0-windows` | The `windeskctl` binary: CLI and MCP adapters only. |
+| `tests/WinDeskCtl.Core.Tests` | `net10.0` | Unit tests. No mocks — Core has nothing to mock. |
 
 `doctor` is the calibration surface: display topology, DPI, and drag thresholds are measured at
 runtime, never hardcoded and never committed.

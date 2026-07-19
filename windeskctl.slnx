@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WinDeskCtl.Core/WinDeskCtl.Core.csproj" />
+    <Project Path="src/WinDeskCtl.Platform/WinDeskCtl.Platform.csproj" />
+    <Project Path="src/WinDeskCtl/WinDeskCtl.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WinDeskCtl.Core.Tests/WinDeskCtl.Core.Tests.csproj" />
+  </Folder>
+</Solution>

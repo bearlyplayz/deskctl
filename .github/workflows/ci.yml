@@ -18,4 +18,4 @@ jobs:
       - run: dotnet build -c Release
       - run: dotnet test -c Release
       # AOT link and trim failures only surface at publish, never at build or test.
-      - run: dotnet publish src/Deskctl/Deskctl.csproj -c Release
+      - run: dotnet publish src/WinDeskCtl/WinDeskCtl.csproj -c Release

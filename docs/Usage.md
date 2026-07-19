@@ -1,10 +1,10 @@
 # Usage
 
-deskctl is a single Windows binary that captures the screen, reads UI, and sends input. It has two
+windeskctl is a single Windows binary that captures the screen, reads UI, and sends input. It has two
 surfaces over the same set of commands:
 
-- a **CLI** — `deskctl <command>`, one process per invocation
-- an **MCP stdio server** — `deskctl mcp`, one long-lived process that exposes the same commands as
+- a **CLI** — `windeskctl <command>`, one process per invocation
+- an **MCP stdio server** — `windeskctl mcp`, one long-lived process that exposes the same commands as
   tools to an MCP client (an LLM agent, typically)
 
 Everything below works identically on both. Where the CLI and the MCP tool differ only in spelling,
@@ -26,11 +26,11 @@ an image and a click can never disagree about which space they mean:
 that element. Coordinates inside a frame are always measured from the frame's top-left and are never
 negative.
 
-**Two coordinate spaces exist and deskctl hides the harder one.** A *frame point* is measured from
+**Two coordinate spaces exist and windeskctl hides the harder one.** A *frame point* is measured from
 its frame's top-left. An *absolute screen point* is measured from the primary monitor, and goes
-negative for monitors above or left of primary. You always work in frame points; deskctl converts.
+negative for monitors above or left of primary. You always work in frame points; windeskctl converts.
 The two happen to be equal on single-monitor and simple side-by-side layouts, which is exactly why
-hand-computed coordinates work on your desk and break on someone else's. Let deskctl do it.
+hand-computed coordinates work on your desk and break on someone else's. Let windeskctl do it.
 
 **Run `doctor` first when coordinates behave unexpectedly.** Display topology, DPI, and drag
 thresholds are measured on the live machine, never assumed.
@@ -44,9 +44,9 @@ check. This is where you read monitor ids for `capture`, and the first thing to 
 coordinate-related looks wrong.
 
 ```powershell
-deskctl doctor              # human-readable summary
-deskctl doctor --json       # the raw report as JSON
-deskctl doctor --intrusive  # add checks that disturb the desktop (may steal focus, pop Start)
+windeskctl doctor              # human-readable summary
+windeskctl doctor --json       # the raw report as JSON
+windeskctl doctor --intrusive  # add checks that disturb the desktop (may steal focus, pop Start)
 ```
 
 MCP: tool `doctor`, argument `includeIntrusive` (default `false`).
@@ -64,10 +64,10 @@ Lists windows with **DWM-accurate geometry** — the rect as actually drawn, not
 as `win:<hwnd>`.
 
 ```powershell
-deskctl windows list                       # every window
-deskctl windows list --title notepad       # title contains "notepad" (case-insensitive)
-deskctl windows list --process chrome      # from the chrome process
-deskctl windows list --json                # JSON instead of a table
+windeskctl windows list                       # every window
+windeskctl windows list --title notepad       # title contains "notepad" (case-insensitive)
+windeskctl windows list --process chrome      # from the chrome process
+windeskctl windows list --json                # JSON instead of a table
 ```
 
 In the table, a `*` marks the foreground window. Filter rather than dumping everything when you know
@@ -80,16 +80,16 @@ MCP: tool `windows`, arguments `titleContains`, `processName`, `includeMinimized
 ## windows &lt;action&gt; / window_action — move and manage windows
 
 Focus, move, resize, minimize, maximize, or restore a window. Move and resize coordinates address
-the **visible** edges of the window — deskctl converts to the raw rect Win32 wants, so what you ask
+the **visible** edges of the window — windeskctl converts to the raw rect Win32 wants, so what you ask
 for is what you see.
 
 ```powershell
-deskctl windows focus 12345
-deskctl windows move 12345 --x 100 --y -1000        # visible top-left corner
-deskctl windows resize 12345 --width 800 --height 600
-deskctl windows minimize 12345
-deskctl windows maximize 12345
-deskctl windows restore 12345
+windeskctl windows focus 12345
+windeskctl windows move 12345 --x 100 --y -1000        # visible top-left corner
+windeskctl windows resize 12345 --width 800 --height 600
+windeskctl windows minimize 12345
+windeskctl windows maximize 12345
+windeskctl windows restore 12345
 ```
 
 MCP collapses these into one tool `window_action` with an `action` argument
@@ -110,10 +110,10 @@ describing its coordinate space** — feed that rect back when clicking so the c
 saw it.
 
 ```powershell
-deskctl capture --target monitor:1 --out shot.png
-deskctl capture --target win:12345 --region 0,0,400,300 --out crop.png   # sub-rect: x,y,w,h
-deskctl capture --target win:12345 --max-width 1280 --out small.png       # downscale
-deskctl capture --target win:12345 --format jpeg --quality 75 --out shot.jpg
+windeskctl capture --target monitor:1 --out shot.png
+windeskctl capture --target win:12345 --region 0,0,400,300 --out crop.png   # sub-rect: x,y,w,h
+windeskctl capture --target win:12345 --max-width 1280 --out small.png       # downscale
+windeskctl capture --target win:12345 --format jpeg --quality 75 --out shot.jpg
 ```
 
 Without `--out`, the CLI prints the frame rect and does **not** print the image — an image whose
@@ -142,10 +142,10 @@ It's `capture` run on a schedule; every option `capture` takes, `record` takes t
 zero-padded files (`frame_0.png`, `frame_1.png`, …) and returns the **list of paths, not the images**.
 
 ```powershell
-deskctl record --target win:12345 --out-dir ./burst                       # default preset (fast)
-deskctl record --target win:12345 --out-dir ./burst --preset slow
-deskctl record --target win:12345 --out-dir ./burst --region 1720,945,400,400   # crop to the moving part
-deskctl record --target monitor:1 --out-dir ./burst --preset slow --format jpeg --quality 75
+windeskctl record --target win:12345 --out-dir ./burst                       # default preset (fast)
+windeskctl record --target win:12345 --out-dir ./burst --preset slow
+windeskctl record --target win:12345 --out-dir ./burst --region 1720,945,400,400   # crop to the moving part
+windeskctl record --target monitor:1 --out-dir ./burst --preset slow --format jpeg --quality 75
 ```
 
 `--out-dir` is required and is created if missing. The CLI prints the frame rect and a frame count,
@@ -183,11 +183,11 @@ screen. Each element gets an opaque `elem:<handle>` you can act on directly with
 coordinates, so you cannot miss.
 
 ```powershell
-deskctl snapshot win:12345                      # interactive elements, as a tree
-deskctl snapshot win:12345 --all                # include non-interactive layout elements
-deskctl snapshot win:12345 --max-depth 6        # walk shallower
-deskctl snapshot win:12345 --json               # JSON instead of a tree
-deskctl snapshot elem:panel-3                   # scope to a subtree
+windeskctl snapshot win:12345                      # interactive elements, as a tree
+windeskctl snapshot win:12345 --all                # include non-interactive layout elements
+windeskctl snapshot win:12345 --max-depth 6        # walk shallower
+windeskctl snapshot win:12345 --json               # JSON instead of a tree
+windeskctl snapshot elem:panel-3                   # scope to a subtree
 ```
 
 MCP: tool `snapshot`, arguments `target`, `maxDepth` (default `12`), `all` (default `false`).
@@ -199,8 +199,8 @@ patterns it supports (e.g. what `invoke` or `fill` will work on) and marks disab
 Handle lifetime is the one thing that differs between surfaces:
 
 - **MCP:** one session is one process, so a `snapshot` handle stays valid for later `input` calls.
-- **CLI:** each command is its own process, so a handle from `deskctl snapshot` is dead by the time
-  a separate `deskctl input` runs. Use `input --snapshot <target>` (below) to snapshot and act in one
+- **CLI:** each command is its own process, so a handle from `windeskctl snapshot` is dead by the time
+  a separate `windeskctl input` runs. Use `input --snapshot <target>` (below) to snapshot and act in one
   process.
 
 `snapshot --vision` deliberately does nothing but point you at `capture` — asking the tree command
@@ -217,8 +217,8 @@ real drags work.
 Steps are a JSON array. From the CLI, pass the array as an argument, or `-` to read it from stdin:
 
 ```powershell
-deskctl input '[{"down":{"key":"ctrl"}},{"press":{"key":"c"}},{"up":{"key":"ctrl"}}]'
-deskctl input --snapshot win:12345 '[{"invoke":{"target":"elem:btn-save"}}]'
+windeskctl input '[{"down":{"key":"ctrl"}},{"press":{"key":"c"}},{"up":{"key":"ctrl"}}]'
+windeskctl input --snapshot win:12345 '[{"invoke":{"target":"elem:btn-save"}}]'
 ```
 
 `--snapshot <target>` snapshots the window first, in the same process, so `elem:` handles in the
@@ -286,11 +286,11 @@ you snapshotted — so re-run `snapshot` if it matters.
 ## mcp — run as a server
 
 ```powershell
-deskctl mcp
+windeskctl mcp
 ```
 
 Serves the Model Context Protocol over stdio. Register it with an MCP client by pointing the client
-at `deskctl.exe` with the `mcp` argument. It exposes seven tools: `doctor`, `windows`,
+at `windeskctl.exe` with the `mcp` argument. It exposes seven tools: `doctor`, `windows`,
 `window_action`, `capture`, `record`, `snapshot`, `input`.
 
 There is no port and no socket — the transport is stdio, so the OS process boundary is the security
