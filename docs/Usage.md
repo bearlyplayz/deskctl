@@ -19,6 +19,7 @@ disagreeing about where something is.
 | Page | Command | What it does |
 |---|---|---|
 | [doctor](doctor.md) | `doctor` | Self-test against the live machine. Read monitor ids here. Run it first when coordinates look wrong. |
+| [launch](launch.md) | `launch` | Start a program, log its output, and get back the window it opened. |
 | [windows](windows.md) | `windows list`, `windows <action>` | Find windows with DWM-accurate geometry; focus, move, resize, minimize, maximize, restore. |
 | [capture](capture.md) | `capture` | Pixels of a window or monitor, with the frame rect describing their space. |
 | [record](record.md) | `record` | A short burst of frames to disk, for motion a single capture cannot show. |
@@ -26,9 +27,10 @@ disagreeing about where something is.
 | [input](input.md) | `input` | Mouse and keyboard as one atomic batch. The step grammar lives here. |
 | [mcp](mcp.md) | `mcp` | Serve the Model Context Protocol over stdio. |
 
-**Where to start:** `doctor` to check the machine, `windows list` to find your target, then
-`snapshot` to see what is in it. Reach for `capture` only when there is no element tree — canvases,
-video, games, remote desktop.
+**Where to start:** `doctor` to check the machine, then `windows list` to find your target — or
+`launch` if the program is not running yet, which starts it and hands back the window in one step.
+Then `snapshot` to see what is in it. Reach for `capture` only when there is no element tree —
+canvases, video, games, remote desktop.
 
 ---
 

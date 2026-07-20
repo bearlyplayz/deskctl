@@ -4,6 +4,7 @@ using WinDeskCtl.Core.Capture;
 using WinDeskCtl.Core.Commands;
 using WinDeskCtl.Core.Frames;
 using WinDeskCtl.Core.Input;
+using WinDeskCtl.Core.Launch;
 using WinDeskCtl.Core.Uia;
 using WinDeskCtl.Core.Windows;
 
@@ -36,6 +37,11 @@ namespace WinDeskCtl.Core.Json;
 [JsonSerializable(typeof(WindowListResult))]
 [JsonSerializable(typeof(WindowActionInput))]
 [JsonSerializable(typeof(WindowActionResult))]
+// The launch tool takes its argument and environment lists as string arrays, so the resolver MCP
+// builds its parameter marshaller from at host startup has to know the type.
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(LaunchInput))]
+[JsonSerializable(typeof(LaunchResult))]
 [JsonSerializable(typeof(WindowState))]
 [JsonSerializable(typeof(WindowAction))]
 [JsonSerializable(typeof(Step))]

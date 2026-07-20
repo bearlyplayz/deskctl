@@ -5,6 +5,7 @@ using WinDeskCtl.Core.Commands;
 using WinDeskCtl.Core.Frames;
 using WinDeskCtl.Core.Input;
 using WinDeskCtl.Core.Json;
+using WinDeskCtl.Core.Launch;
 using WinDeskCtl.Core.Uia;
 using WinDeskCtl.Core.Windows;
 using WinDeskCtl.Platform.Commands;
@@ -50,6 +51,7 @@ internal static class CliRoot
         root.Subcommands.Add(BuildCapture());
         root.Subcommands.Add(BuildRecord());
         root.Subcommands.Add(BuildWindows());
+        root.Subcommands.Add(BuildLaunch());
         root.Subcommands.Add(BuildInput());
         root.Subcommands.Add(BuildSnapshot());
         root.Subcommands.Add(BuildMcp());
@@ -340,6 +342,128 @@ internal static class CliRoot
         });
 
         return command;
+    }
+
+    private static Command BuildLaunch()
+    {
+        Argument<string> programArgument = new("program")
+        {
+            Description = "The executable to run. A full path, or a bare name found on PATH.",
+        };
+
+        // Everything after '--' belongs to the launched program. Passing them through a repeatable
+        // option instead would make an argument that looks like a flag ambiguous between the two
+        // programs, and the launched one has the better claim to it.
+        Argument<string[]> argsArgument = new("args")
+        {
+            Description = "Arguments for the program, after a '--' separator.",
+            Arity = ArgumentArity.ZeroOrMore,
+        };
+
+        Option<string[]> envOption = new("--env")
+        {
+            Description = "NAME=VALUE to add to the program's environment. Repeatable.",
+            Arity = ArgumentArity.ZeroOrMore,
+        };
+        Option<string?> cwdOption = new("--cwd")
+        {
+            Description = "Working directory. Defaults to the executable's own directory.",
+        };
+        Option<string?> logOption = new("--log")
+        {
+            Description = "Where to write the program's stdout and stderr. Defaults under %TEMP%\\windeskctl.",
+        };
+        Option<bool> appendOption = new("--append")
+        {
+            Description = "Append to the log instead of truncating it.",
+        };
+        Option<int> waitOption = new("--wait-ms")
+        {
+            Description = "How long to wait for the program's window. 0 to not wait at all.",
+            DefaultValueFactory = _ => 60_000,
+        };
+        Option<int> settleOption = new("--settle-ms")
+        {
+            Description = "How long to keep watching after the first window appears, to see past a splash screen.",
+            DefaultValueFactory = _ => 1_000,
+        };
+        Option<string?> titleOption = new("--title")
+        {
+            Description = "Prefer the window whose title contains this. A hint that ranks, not a filter.",
+        };
+        Option<string?> processOption = new("--process")
+        {
+            Description = "Prefer a window from this process. Helps when the program hands off to another.",
+        };
+        Option<bool> jsonOption = new("--json") { Description = "Emit JSON instead of a summary" };
+
+        Command launch = new("launch", "Start a program, log its output, and report the window it opens")
+        {
+            envOption, cwdOption, logOption, appendOption,
+            waitOption, settleOption, titleOption, processOption, jsonOption,
+        };
+        launch.Arguments.Add(programArgument);
+        launch.Arguments.Add(argsArgument);
+
+        launch.SetAction(async (parseResult, ct) =>
+        {
+            LaunchInput input = new(
+                Path: parseResult.GetValue(programArgument)!,
+                Arguments: parseResult.GetValue(argsArgument) ?? [],
+                Environment: parseResult.GetValue(envOption) ?? [],
+                WorkingDirectory: parseResult.GetValue(cwdOption),
+                LogPath: parseResult.GetValue(logOption),
+                AppendLog: parseResult.GetValue(appendOption),
+                WaitForWindowMs: parseResult.GetValue(waitOption),
+                SettleMs: parseResult.GetValue(settleOption),
+                TitleContains: parseResult.GetValue(titleOption),
+                ProcessName: parseResult.GetValue(processOption));
+
+            LaunchResult result = await new LaunchCommand().RunAsync(input, ct);
+
+            if (parseResult.GetValue(jsonOption))
+            {
+                Console.WriteLine(WinDeskCtlJson.Serialize(result));
+            }
+            else
+            {
+                WriteLaunch(result);
+            }
+
+            // A launch that started the program succeeded, whether or not a window was found —
+            // the window is best-effort and the log path is the thing worth having either way.
+            // Only a program that exited non-zero is reported as a failure.
+            return result.ExitCode is not null and not 0 ? 1 : 0;
+        });
+
+        return launch;
+    }
+
+    private static void WriteLaunch(LaunchResult result)
+    {
+        string exit = result.ExitCode is int code ? $"exited {code}" : "running";
+        Console.WriteLine($"pid {result.ProcessId}  {exit}");
+        Console.WriteLine($"log {result.LogPath}");
+
+        if (result.Window is WindowInfo w)
+        {
+            Console.WriteLine(
+                $"win:{w.Hwnd}  {w.Rect.OriginX},{w.Rect.OriginY} {w.Rect.W}x{w.Rect.H}  " +
+                $"{w.State}  {w.ProcessName}  {w.Title}");
+        }
+        else
+        {
+            // Never silent about this. The caller asked for a window and is not getting one, and
+            // the log is where the reason will be.
+            Console.WriteLine("no window found — read the log, or list windows to find it yourself");
+        }
+
+        foreach (WindowInfo other in result.OtherWindows)
+        {
+            Console.WriteLine(
+                $"  also win:{other.Hwnd}  {other.Rect.OriginX},{other.Rect.OriginY} " +
+                $"{other.Rect.W}x{other.Rect.H}  {other.Title}");
+        }
     }
 
     /// <summary>

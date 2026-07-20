@@ -5,6 +5,7 @@ using WinDeskCtl.Core.Commands;
 using WinDeskCtl.Core.Frames;
 using WinDeskCtl.Core.Input;
 using WinDeskCtl.Core.Json;
+using WinDeskCtl.Core.Launch;
 using WinDeskCtl.Core.Uia;
 using WinDeskCtl.Core.Windows;
 using WinDeskCtl.Platform.Commands;
@@ -207,6 +208,62 @@ internal sealed class WinDeskCtlTools
         CancellationToken ct = default)
         => await ReportingCallerErrors(() => new WindowListCommand().RunAsync(
             new WindowListInput(titleContains, processName, includeMinimized), ct));
+
+    [McpServerTool(Name = "launch")]
+    [Description("""
+        Start a program, capture its stdout/stderr to a log file, and wait for the window it
+        opens — the first step of a session, before windows/snapshot/input.
+
+        Returns processId, logPath, exitCode, window, and otherWindows — null fields are omitted,
+        so a missing key means null. The pid and log path are always right; the window is BEST
+        EFFORT. It is found by watching for windows that did not exist before the launch and
+        belong to the launched process or a child of it.
+
+        No window key means nothing could be attributed to the launch — a program that opens no
+        window, one slower than waitForWindowMs, one that reused an existing window instead of
+        opening a new one, or one that failed. That is not an error: read logPath to find out why,
+        or call windows to look for it yourself. A non-zero exitCode means it did not start;
+        exitCode 0 with a window usually means it handed off to an already-running copy of itself.
+
+        If the program shows a SPLASH SCREEN or opens several windows, pass titleContains — it
+        ranks candidates rather than filtering them, so a near-miss guess still returns a window.
+        When the ranking picks wrong, otherWindows holds the alternatives; use one of those
+        rather than launching again.
+
+        Cannot launch programs that require elevation. To place the window, follow with
+        window_action — a program cannot be told which monitor to open on.
+        """)]
+    public static async Task<LaunchResult> LaunchAsync(
+        [Description("The executable: a full path, or a bare name found on PATH.")]
+        string path,
+        [Description("Arguments passed to the program verbatim, one array element per argument.")]
+        string[]? arguments = null,
+        [Description("Extra NAME=VALUE environment entries, added to the current environment rather than replacing it.")]
+        string[]? environment = null,
+        [Description("Working directory. Defaults to the executable's own directory.")]
+        string? workingDirectory = null,
+        [Description("Where to write stdout and stderr. Defaults to a file under %TEMP%\\windeskctl.")]
+        string? logPath = null,
+        [Description("Append to the log rather than truncating it.")]
+        bool appendLog = false,
+        [Description("How long to wait for a window, in milliseconds. 0 returns as soon as the program starts.")]
+        int waitForWindowMs = 60_000,
+        [Description(
+            "How long to keep watching after the first window appears, in milliseconds. Raise it " +
+            "for a program with a slow splash screen.")]
+        int settleMs = 1_000,
+        [Description(
+            "Prefer the window whose title contains this (case-insensitive). A hint that ranks " +
+            "candidates, not a filter — a wrong guess still returns a window.")]
+        string? titleContains = null,
+        [Description("Prefer a window from this process, e.g. 'chrome'. Ranks like titleContains.")]
+        string? processName = null,
+        CancellationToken ct = default)
+        => await ReportingCallerErrors(() => new LaunchCommand().RunAsync(
+            new LaunchInput(
+                path, arguments, environment, workingDirectory, logPath, appendLog,
+                waitForWindowMs, settleMs, titleContains, processName),
+            ct));
 
     [McpServerTool(Name = "window_action")]
     [Description(

@@ -73,8 +73,13 @@ internal static partial class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool SetProcessDpiAwarenessContext(nint value);
 
+    internal const int GWL_STYLE = -16;
     internal const int GWL_EXSTYLE = -20;
     internal const uint WS_EX_TOOLWINDOW = 0x00000080;
+
+    /// <summary>WS_BORDER | WS_DLGFRAME. Test for all of it, not any of it — either bit alone is
+    /// a plain border rather than a title bar.</summary>
+    internal const uint WS_CAPTION = 0x00C00000;
 
     internal const int SW_MINIMIZE = 6;
     internal const int SW_MAXIMIZE = 3;

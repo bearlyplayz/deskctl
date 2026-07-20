@@ -48,6 +48,40 @@ public static partial class WindowEnumerator
     }
 
     /// <summary>
+    /// Every top-level handle, unfiltered.
+    /// </summary>
+    /// <remarks>
+    /// The baseline for spotting a window that appears later. Deliberately not filtered by
+    /// <see cref="IsInteresting"/>: a window that already existed but was untitled or cloaked at
+    /// baseline time would be absent from a filtered set, and would then look newly created the
+    /// moment it gained a title.
+    /// </remarks>
+    public static HashSet<nint> AllTopLevelHandles()
+    {
+        HashSet<nint> handles = [];
+
+        User32.EnumWindowsProc callback = (hwnd, _) =>
+        {
+            handles.Add(hwnd);
+            return 1;
+        };
+
+        if (!User32.EnumWindows(callback, 0))
+        {
+            throw new InvalidOperationException("EnumWindows failed.");
+        }
+
+        return handles;
+    }
+
+    /// <summary>Whether the window has a title bar, as opposed to being a bare popup.</summary>
+    public static bool HasCaption(nint hwnd)
+    {
+        uint style = (uint)User32.GetWindowLongPtr(hwnd, User32.GWL_STYLE);
+        return (style & User32.WS_CAPTION) == User32.WS_CAPTION;
+    }
+
+    /// <summary>
     /// Whether a window is one a user would point at. EnumWindows returns every top-level HWND,
     /// most of which are invisible message-only windows, tool windows, and shell plumbing.
     /// </summary>
