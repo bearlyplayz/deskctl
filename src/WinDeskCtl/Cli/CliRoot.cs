@@ -366,9 +366,18 @@ internal static class CliRoot
                 "Required for invoke/fill/waitFor from the CLI, because handles do not outlive the process.",
         };
 
+        Option<bool> noFocusOption = new("--no-focus")
+        {
+            Description =
+                "Do not bring a step's target window to the foreground. Input then lands wherever " +
+                "focus already is — right for hovering or scrolling a background window on purpose, " +
+                "wrong for typing.",
+        };
+
         Command input = new("input", "Send a batch of mouse and keyboard steps atomically")
         {
             snapshotOption,
+            noFocusOption,
         };
         input.Arguments.Add(stepsArgument);
 
@@ -391,7 +400,8 @@ internal static class CliRoot
                 return 1;
             }
 
-            InputResult result = await new InputCommand().RunAsync(new InputRequest(steps), ct);
+            InputResult result = await new InputCommand().RunAsync(
+                new InputRequest(steps, Focus: !parseResult.GetValue(noFocusOption)), ct);
 
             Console.WriteLine($"sent {result.EventsSent} event(s) in {result.Flushes} call(s)");
             if (result.Released.Count > 0)
@@ -409,6 +419,18 @@ internal static class CliRoot
                 Console.WriteLine(
                     $"re-resolved: {string.Join(", ", result.ReResolved)} — these elements had been " +
                     "destroyed and were matched again by selector; re-run snapshot to be sure.");
+            }
+
+            if (result.Focused.Count > 0)
+            {
+                // A repeat means the window was taken back mid-batch, so the events in between
+                // went somewhere else. Naming that here is the difference between debugging your
+                // steps and debugging the desktop.
+                string windows = string.Join(", ", result.Focused.Select(h => $"win:{h}"));
+                Console.WriteLine(result.Focused.Distinct().Count() == result.Focused.Count
+                    ? $"focused: {windows}"
+                    : $"focused: {windows} — a repeat means something took the foreground back " +
+                      "mid-batch; steps before it landed elsewhere.");
             }
 
             return 0;

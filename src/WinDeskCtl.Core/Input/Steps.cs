@@ -53,7 +53,13 @@ public abstract record Step
     public sealed record Delay(TimeSpan Duration) : Step;
 }
 
-public sealed record InputRequest(IReadOnlyList<Step> Steps);
+/// <param name="Focus">Whether naming a window or element target brings that window to the
+/// foreground before injecting at it. On by default, because keyboard events go to whatever holds
+/// the foreground and a batch that names a window means to reach it. Turn it off for input aimed
+/// at a background window on purpose — hovering for a tooltip or scrolling a list you are watching
+/// while something else stays focused — or to reach a window that refuses activation, since a
+/// refused activation fails the whole batch.</param>
+public sealed record InputRequest(IReadOnlyList<Step> Steps, bool Focus = true);
 
 /// <param name="Released">Keys and buttons the held-set unwound automatically. Reported rather
 /// than cleaned up silently: the unwind is not inert — releasing a dangling 'win' opens the
@@ -61,8 +67,14 @@ public sealed record InputRequest(IReadOnlyList<Step> Steps);
 /// <param name="ReResolved">Elements whose cached reference had died, found again by selector.
 /// Reported because re-resolution is a heuristic: it finds an element matching the selector,
 /// which is not provably the one that was snapshotted. Re-run snapshot if it matters.</param>
+/// <param name="Focused">Windows this batch had to pull to the foreground, in the order it took
+/// them. Windows already focused are absent, and repeats are deliberately not collapsed: the same
+/// handle twice means something took the foreground back mid-batch, which is the difference
+/// between a step that misbehaved and a step whose events went somewhere else entirely. That
+/// distinction is invisible in a screenshot of the app you meant to drive.</param>
 public sealed record InputResult(
     int EventsSent,
     int Flushes,
     IReadOnlyList<string> Released,
-    IReadOnlyList<string> ReResolved);
+    IReadOnlyList<string> ReResolved,
+    IReadOnlyList<long> Focused);

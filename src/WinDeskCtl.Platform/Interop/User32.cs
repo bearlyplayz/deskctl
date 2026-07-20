@@ -147,6 +147,12 @@ internal static partial class User32
     [LibraryImport("user32.dll")]
     internal static partial nint GetForegroundWindow();
 
+    /// <summary>GA_ROOT — walk to the top-level window, past any child-HWND control.</summary>
+    internal const uint GA_ROOT = 2;
+
+    [LibraryImport("user32.dll")]
+    internal static partial nint GetAncestor(nint hwnd, uint flags);
+
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool SetForegroundWindow(nint hwnd);

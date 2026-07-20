@@ -109,6 +109,24 @@ public static class HandleRegistry
     }
 
     /// <summary>
+    /// The snapshot root a handle was minted under, without taking a reference on it.
+    /// </summary>
+    /// <remarks>
+    /// For reading properties of the scope itself — its native window handle, say. The pointer is
+    /// valid only while the entry lives, which is the process lifetime, so it is safe to read but
+    /// must not be stored or released. Returns 0 for an unknown handle rather than throwing: a
+    /// caller asking which window owns an element is doing so to improve on a best effort, not to
+    /// act on the answer.
+    /// </remarks>
+    public static nint ScopeOf(string handle)
+    {
+        lock (Gate)
+        {
+            return Entries.TryGetValue(handle, out Entry? entry) ? entry.ScopeAbi : 0;
+        }
+    }
+
+    /// <summary>
     /// Probes the cached reference with a cheap property read. UIA signals a dead element by
     /// throwing from any call, so there is no "is alive" to ask. Any COM failure counts as dead:
     /// re-resolution will either find the element or fail loudly, which beats acting on a

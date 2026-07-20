@@ -28,6 +28,7 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
 
         int sent = 0, flushes = 0;
         List<string> reResolved = [];
+        FocusState focus = new(request.Focus);
 
         try
         {
@@ -38,6 +39,15 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
                 switch (op)
                 {
                     case PlannedOp.Send send:
+                        // Steps that name no frame — text, and bare key presses — resolve nothing,
+                        // so the foreground they land in is whatever the previous op left. Between
+                        // two ops the desktop has had real elapsed time to change it: a delay, a
+                        // timed drag, or a waitFor is exactly long enough for a notification to
+                        // take the foreground, and the batch would then type into it. Re-asserting
+                        // the last window this batch focused costs one GetForegroundWindow when
+                        // nothing moved.
+                        focus.Reassert();
+
                         // Mirror into the exit guard BEFORE sending: a crash between the send and the
                         // bookkeeping would otherwise leave a key held with nothing tracking it. The
                         // superset of everything the array downs is tracked, then narrowed afterwards
@@ -56,7 +66,7 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
 
                         foreach (InputTarget t in touched) ExitGuard.Track(t);
 
-                        sent += InputSender.Send(send.Steps, bounds, s => Resolve(s, bounds, reResolved));
+                        sent += InputSender.Send(send.Steps, bounds, s => Resolve(s, bounds, reResolved, focus));
 
                         IReadOnlyList<InputTarget> stillHeld = HeldSet.NetHeld(send.Steps);
                         foreach (InputTarget t in touched)
@@ -72,7 +82,7 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
                         break;
 
                     case PlannedOp.Semantic { Step: Step.Move { Over: not null } move }:
-                        sent += await MoveOverTimeAsync(move, bounds, reResolved, ct);
+                        sent += await MoveOverTimeAsync(move, bounds, reResolved, focus, ct);
                         flushes++;
                         break;
 
@@ -128,7 +138,8 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
 
         // Distinct: a batch may touch one element several times, and the caller's question is
         // which elements were found again rather than how often.
-        return new InputResult(sent, flushes, [.. plan.AutoReleased.Select(Describe)], [.. reResolved.Distinct()]);
+        return new InputResult(
+            sent, flushes, [.. plan.AutoReleased.Select(Describe)], [.. reResolved.Distinct()], focus.Taken);
     }
 
     /// <summary>Extracts the handle from an "elem:&lt;handle&gt;" reference. Semantic steps act on
@@ -150,9 +161,9 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
     /// steps.
     /// </summary>
     private static async Task<int> MoveOverTimeAsync(
-        Step.Move move, FrameRect bounds, List<string> reResolved, CancellationToken ct)
+        Step.Move move, FrameRect bounds, List<string> reResolved, FocusState focus, CancellationToken ct)
     {
-        Point target = Resolve(move.To, bounds, reResolved);
+        Point target = Resolve(move.To, bounds, reResolved, focus);
 
         if (!Cursor.GetCursorPos(out Cursor.POINT current))
         {
@@ -182,10 +193,10 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
     /// coordinate step at an element re-resolves exactly as a semantic step does, and carries the
     /// same twin-survivor hazard — so it is reported on the same channel.
     /// </param>
-    private static Point Resolve(string reference, FrameRect bounds, List<string> reResolved)
+    private static Point Resolve(string reference, FrameRect bounds, List<string> reResolved, FocusState focus)
     {
         (Frame frame, int x, int y) = PointRef.Parse(reference);
-        FrameRect rect = RectFor(frame, bounds, reResolved);
+        FrameRect rect = RectFor(frame, bounds, reResolved, focus);
 
         if (PointRef.IsCentre((frame, x, y)))
         {
@@ -196,15 +207,45 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
         return Translate.To(new Point(frame, x, y), rect, bounds);
     }
 
-    private static FrameRect RectFor(Frame frame, FrameRect bounds, List<string> reResolved) => frame switch
+    /// <summary>
+    /// The frame's live bounds, focusing its owning window on the way when the frame names one.
+    /// </summary>
+    /// <remarks>
+    /// Focusing here rather than in a separate pass is what makes it total: this is the one place
+    /// a frame-qualified reference becomes a rect, so every injecting step — move, press with a
+    /// "to", scroll with an "at", and every sample of a timed move — routes through it and cannot
+    /// be forgotten. Naming a window is taken as intent to interact with it; keyboard events go to
+    /// whatever holds the foreground, so without this a batch that names a background window types
+    /// into whatever the user was last using.
+    ///
+    /// ponytail: within one coalesced SendInput array the focus of every step happens before any
+    /// event is dispatched, so a batch naming two windows leaves the last one focused. Mouse
+    /// events still route by cursor position and land correctly; keyboard events do not. Splitting
+    /// the array on a window change would fix it — put a delay between the two windows' steps
+    /// until then.
+    /// </remarks>
+    private static FrameRect RectFor(Frame frame, FrameRect bounds, List<string> reResolved, FocusState focus)
     {
-        Frame.Virtual => bounds,
-        Frame.Monitor m => DisplayEnumerator.GetMonitors().FirstOrDefault(x => x.Id == m.Id)?.Bounds
-            ?? throw new ArgumentException($"No monitor with id '{m.Id}'."),
-        Frame.Window w => WindowGeometry.GetRect((nint)w.Hwnd),
-        Frame.Element e => ElementRectOf(e, reResolved),
-        _ => throw new ArgumentOutOfRangeException(nameof(frame)),
-    };
+        switch (frame)
+        {
+            case Frame.Virtual:
+                return bounds;
+
+            case Frame.Monitor m:
+                return DisplayEnumerator.GetMonitors().FirstOrDefault(x => x.Id == m.Id)?.Bounds
+                    ?? throw new ArgumentException($"No monitor with id '{m.Id}'.");
+
+            case Frame.Window w:
+                focus.Take((nint)w.Hwnd);
+                return WindowGeometry.GetRect((nint)w.Hwnd);
+
+            case Frame.Element e:
+                return ElementRectOf(e, reResolved, focus);
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(frame));
+        }
+    }
 
     /// <summary>
     /// The live bounds of a snapshotted element, so a coordinate step can aim at one:
@@ -212,14 +253,18 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
     /// </summary>
     /// <remarks>
     /// Read fresh rather than taken from the snapshot — the element may have moved or scrolled
-    /// since, and a stale rect is how a click lands on whatever took its place.
+    /// since, and a stale rect is how a click lands on whatever took its place. The owning window
+    /// is focused before the rect is read, not after: activation can move or restore the window,
+    /// and a rect read beforehand would describe where the element used to be.
     /// </remarks>
-    private static FrameRect ElementRectOf(Frame.Element e, List<string> reResolved)
+    private static FrameRect ElementRectOf(Frame.Element e, List<string> reResolved, FocusState focus)
     {
         (nint abi, Resolution resolution) = HandleRegistry.Resolve(e.Handle);
         if (resolution == Resolution.ReResolved) reResolved.Add(e.ToString());
         try
         {
+            focus.Take(ElementWindow.OwnerOf(e.Handle, abi));
+
             return ElementRect.Of(abi, e);
         }
         finally

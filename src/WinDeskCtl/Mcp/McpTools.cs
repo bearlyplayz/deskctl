@@ -262,12 +262,22 @@ internal sealed class WinDeskCtlTools
           {"scroll":{"dy":-3,"at":"elem:list"}}  {"text":"hi"}  {"invoke":{"target":"elem:x"}}
           {"fill":{"target":"elem:x","value":"y"}}  {"waitFor":{...}}  {"delay":{...}}
         down/up/press need "key" OR "button" (tag required — 'left'/'right' are both). A point is
-        "<frame>@<x>,<y>", or "<frame>" for its centre. A drag's move must have a timed "over" or the
-        app sees a click. Anything left held auto-releases newest-first and is reported in 'released'
-        — a dangling "win" opens the Start menu, so emit your own 'up'.
+        "<frame>@<x>,<y>", or "<frame>" for its centre. Naming a win:/elem: target focuses that
+        window and keeps re-asserting it, so no separate focus call is needed — aim at the window
+        you mean. 'focused' reports what was pulled forward; the same handle twice means something
+        stole the foreground back mid-batch and the steps in between landed elsewhere, so check it
+        before blaming your steps. A drag's move must have a timed "over" or the app sees a click.
+        Anything left held auto-releases newest-first and is reported in 'released' — a dangling
+        "win" opens the Start menu, so emit your own 'up'.
         """)]
     public static async Task<InputResult> InputAsync(
         [Description("The JSON array of steps.")] JsonElement steps,
+        [Description(
+            "Bring each step's target window to the foreground before injecting at it (default " +
+            "true). Set false only for input meant to land in a background window — hovering for a " +
+            "tooltip, scrolling a list you are watching — since keystrokes follow the foreground, " +
+            "not the cursor.")]
+        bool focus = true,
         CancellationToken ct = default)
         => await ReportingCallerErrors(() =>
         {
@@ -285,6 +295,6 @@ internal sealed class WinDeskCtlTools
                 throw new ArgumentException("No steps to run.", nameof(steps));
             }
 
-            return new InputCommand().RunAsync(new InputRequest(parsed), ct);
+            return new InputCommand().RunAsync(new InputRequest(parsed, focus), ct);
         });
 }
