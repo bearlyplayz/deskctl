@@ -48,6 +48,8 @@ windeskctl capture --target monitor:1 --out shot.png
 windeskctl capture --target win:12345 --region 0,0,400,300 --max-width 1280
 windeskctl capture --target win:12345 --format jpeg --quality 75 --out shot.jpg
 
+windeskctl record --target win:12345 --out-dir ./burst   # frames over time, to see motion
+
 windeskctl snapshot win:12345                      # UI element tree
 windeskctl snapshot win:12345 --json --max-depth 6
 
@@ -57,28 +59,27 @@ windeskctl input --snapshot win:12345 '[{"invoke":{"target":"elem:btn-save"}}]'
 windeskctl mcp                                     # serve MCP over stdio
 ```
 
+**Full documentation: [docs/Usage.md](docs/Usage.md)** — one page per command, plus the coordinate
+concepts every command shares.
+
+| Page | Covers |
+|---|---|
+| [doctor](docs/doctor.md) | Self-test the machine; read monitor ids. Run it first when coordinates look wrong. |
+| [windows](docs/windows.md) | Find windows; focus, move, resize, minimize, maximize, restore. |
+| [capture](docs/capture.md) | Pixels of a window or monitor, with the frame rect describing their space. |
+| [record](docs/record.md) | A burst of frames to disk, for motion a single capture cannot show. |
+| [snapshot](docs/snapshot.md) | The UI as a tree of named elements — the default way to see the screen. |
+| [input](docs/input.md) | Mouse and keyboard as one atomic batch, and the full step grammar. |
+| [mcp](docs/mcp.md) | Serving the Model Context Protocol over stdio. |
+
 Every command takes a frame-qualified target, so an image and a click can never disagree about
-which space they are in. Run `doctor` first when coordinates behave unexpectedly — it measures
-this machine rather than assuming.
-
-A point is `<frame>@<x>,<y>`, or `<frame>` alone for its centre. Anything a batch leaves held is
-released automatically, newest first, and reported back in `released` — that release is real
-input, so a dangling `win` opens the Start menu. A batch that fails part-way unwinds too, and
-names what it released in the error.
-
-`--max-width`/`--max-height` are the lever worth reaching for: image cost tracks pixel
-dimensions, not bytes, so downscaling saves tokens and `--format jpeg` saves none. Any downscale
-sets `scale` in the returned rect rather than rescaling silently. JPEG is there for when bytes
-genuinely cost something, such as writing to disk.
+which space they are in. A point is `<frame>@<x>,<y>`, or `<frame>` alone for its centre. Run
+`doctor` first when coordinates behave unexpectedly — it measures this machine rather than
+assuming.
 
 Register the MCP server with a client by pointing it at `windeskctl.exe` with the `mcp` argument.
-It exposes the same commands as tools: `doctor`, `windows`, `window_action`, `capture`,
-`snapshot`, `input`. There is no port and no socket: the transport is stdio, so the OS process
-boundary is the security model.
-
-Element handles (`elem:...`) are minted by `snapshot` and scoped to the process that minted them,
-so a CLI `snapshot` in one process cannot be referenced by a separate `input` process — pass
-`input --snapshot <target>` for that, or hold one MCP session, where both share a process.
+There is no port and no socket: the transport is stdio, so the OS process boundary is the security
+model.
 
 ## Layout
 
