@@ -5,7 +5,8 @@
 Captures a short burst of frames to disk, one file per frame, so a caller can see motion a single
 `capture` cannot show — a spinner turning, a progress bar filling, a video playing, a transition.
 It's [`capture`](capture.md) run on a schedule; every option `capture` takes, `record` takes too. It writes ordered
-zero-padded files (`frame_0.png`, `frame_1.png`, …) and returns the **list of paths, not the images**.
+`frame_NNN` files — zero-padded to the burst's own frame count, so `fast` gives `frame_0`…`frame_8`
+and a 30-frame preset gives `frame_00`…`frame_29` — and returns the **list of paths, not the images**.
 
 ```powershell
 windeskctl record --target win:12345 --out-dir ./burst                       # default preset (fast)

@@ -118,7 +118,7 @@ internal sealed class WinDeskCtlTools
     [McpServerTool(Name = "record")]
     [Description(
         "Capture a burst of frames to disk to SEE motion a single capture cannot — animating, " +
-        "loading, frozen, or done. Writes ordered files (frame_000.png…) to outputDir and returns " +
+        "loading, frozen, or done. Writes ordered frame_NNN files to outputDir and returns " +
         "their filenames, not the images; read them with your image tools (first/middle/last is " +
         "usually enough). Crop to the moving area with 'region'. The preset picks rate/duration " +
         "(≤30 frames); identical frames mean static or mis-sampled — retry another preset.")]
