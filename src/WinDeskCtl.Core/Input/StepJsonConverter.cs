@@ -73,7 +73,8 @@ public sealed class StepJsonConverter : JsonConverter<Step>
                 OptNullableInt(body, "maxHeight"),
                 OptEnum(body, "format", ImageFormat.Png),
                 OptInt(body, "quality", 90),
-                OptBool(body, "ocr")),
+                OptBool(body, "ocr"),
+                OptStringList(body, "ocrFilter")),
             "record" => new Step.Record(
                 Frame.Parse(ReqString(body, "target", verb)),
                 ReqString(body, "outputDir", verb),
@@ -164,6 +165,23 @@ public sealed class StepJsonConverter : JsonConverter<Step>
         e.TryGetProperty("region", out JsonElement v) && v.ValueKind == JsonValueKind.String
             ? CropBox.Parse(v.GetString()!)
             : null;
+
+    /// <summary>Accepts an array of strings or a bare string — a caller hunting one label
+    /// should not need to remember the wrapping brackets.</summary>
+    private static IReadOnlyList<string>? OptStringList(JsonElement e, string name)
+    {
+        if (!e.TryGetProperty(name, out JsonElement v)) return null;
+
+        return v.ValueKind switch
+        {
+            JsonValueKind.String => [v.GetString()!],
+            JsonValueKind.Array => [.. v.EnumerateArray().Select(x =>
+                x.ValueKind == JsonValueKind.String
+                    ? x.GetString()!
+                    : throw new JsonException($"'{name}' entries must be strings."))],
+            _ => throw new JsonException($"'{name}' must be a string or an array of strings."),
+        };
+    }
 
     private static TEnum OptEnum<TEnum>(JsonElement e, string name, TEnum fallback) where TEnum : struct, Enum
     {

@@ -61,6 +61,8 @@ public abstract record Step
     /// a later step in the same batch can click into it.
     /// </summary>
     /// <param name="Ocr">Recognize text in the capture; the batch result carries it with the file.</param>
+    /// <param name="OcrFilter">Return only OCR lines containing any of these, case-insensitively.
+    /// Setting a filter implies OCR.</param>
     public sealed record Capture(
         Frame Target,
         string Path,
@@ -69,7 +71,8 @@ public abstract record Step
         int? MaxHeight = null,
         ImageFormat Format = ImageFormat.Png,
         int Quality = 90,
-        bool Ocr = false) : Step;
+        bool Ocr = false,
+        IReadOnlyList<string>? OcrFilter = null) : Step;
 
     /// <summary>
     /// A burst of frames written to <paramref name="OutputDir"/> mid-batch.

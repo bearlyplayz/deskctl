@@ -146,11 +146,18 @@ internal static class CliRoot
                 "Recognize text in the capture and print each line and word with its rect, in " +
                 "image coordinates. Runs on the full-resolution pixels regardless of downscale.",
         };
+        Option<string[]> ocrFilterOption = new("--ocr-filter")
+        {
+            Description =
+                "Print only OCR lines containing this (case-insensitive). Repeatable; a line " +
+                "matching any filter is kept. Implies --ocr.",
+            Arity = ArgumentArity.ZeroOrMore,
+        };
 
         Command capture = new("capture", "Capture pixels of a window or monitor")
         {
             targetOption, regionOption, maxWidthOption, maxHeightOption,
-            formatOption, qualityOption, outOption, ocrOption,
+            formatOption, qualityOption, outOption, ocrOption, ocrFilterOption,
         };
 
         capture.SetAction(async (parseResult, ct) =>
@@ -165,7 +172,8 @@ internal static class CliRoot
                 MaxHeight: maxHeight,
                 Format: ParseFormat(parseResult.GetValue(formatOption)),
                 Quality: parseResult.GetValue(qualityOption),
-                Ocr: parseResult.GetValue(ocrOption));
+                Ocr: parseResult.GetValue(ocrOption),
+                OcrFilter: parseResult.GetValue(ocrFilterOption) is { Length: > 0 } filters ? filters : null);
 
             using CaptureCommand command = new();
             CaptureResult result = await command.RunAsync(input, ct);

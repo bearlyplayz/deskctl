@@ -32,6 +32,23 @@ public static class CaptureDefaults
 public sealed record OcrWord(string Text, CropBox Rect);
 
 /// <summary>
+/// Narrows OCR output to the lines a caller is hunting. Whole-window OCR of a text-dense
+/// surface is hundreds of lines; a caller looking for one button label asked for none of the rest.
+/// </summary>
+public static class OcrFilters
+{
+    /// <summary>Lines whose text contains ANY filter, case-insensitively. Matching lines are
+    /// returned whole — words included — so the word rect is still there to click. No filters
+    /// returns the input unchanged; no matches returns an empty list, which is itself the
+    /// answer: that text is not on screen.</summary>
+    public static IReadOnlyList<OcrLine> Apply(IReadOnlyList<OcrLine> lines, IReadOnlyList<string>? filters) =>
+        filters is not { Count: > 0 }
+            ? lines
+            : [.. lines.Where(l => filters.Any(f =>
+                l.Text.Contains(f, StringComparison.OrdinalIgnoreCase)))];
+}
+
+/// <summary>
 /// One recognized line: its full text, the union of its words' boxes, and the words themselves.
 /// Word rects matter when a line spans several targets — a menu bar reads as one line, and only
 /// the word's own rect gives a correct click point for one entry in it.
@@ -48,6 +65,9 @@ public sealed record OcrLine(string Text, CropBox Rect, IReadOnlyList<OcrWord> W
 /// <param name="MintFrame">Whether to mint an img: frame for the result. On for captures a
 /// caller will click back into; off for a record burst's individual frames, which share one
 /// rect and get one frame for the whole burst.</param>
+/// <param name="OcrFilter">Return only OCR lines containing any of these, case-insensitively.
+/// Setting a filter implies OCR — the caller named text to find, so asking for
+/// <paramref name="Ocr"/> separately would be a second switch for the same intent.</param>
 public sealed record CaptureInput(
     Frame Target,
     CropBox? Region = null,
@@ -56,8 +76,21 @@ public sealed record CaptureInput(
     ImageFormat Format = ImageFormat.Png,
     int Quality = 90,
     bool Ocr = false,
-    bool MintFrame = true)
+    bool MintFrame = true,
+    IReadOnlyList<string>? OcrFilter = null)
 {
+    /// <summary>Whether recognition runs at all: asked for outright, or implied by a filter.</summary>
+    public bool WantsOcr => Ocr || OcrFilter is { Count: > 0 };
+
+    /// <summary>
+    /// A whitespace-only filter matches every line, which silently turns a narrowing request
+    /// into the full dump it was meant to prevent — rejected rather than honoured.
+    /// </summary>
+    public IReadOnlyList<string>? OcrFilter { get; } =
+        OcrFilter is { } f && f.Any(string.IsNullOrWhiteSpace)
+            ? throw new ArgumentException("OCR filters must be non-empty text.", nameof(OcrFilter))
+            : OcrFilter;
+
     /// <summary>
     /// Validated here rather than at each surface: this record is what both the CLI and MCP
     /// build, so it is the one place a bad value cannot route around. Out-of-range quality

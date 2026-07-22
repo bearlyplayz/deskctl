@@ -12,6 +12,7 @@ windeskctl capture --target monitor:1 --out shot.png
 windeskctl capture --target win:12345 --region 0,0,400,300 --out crop.png   # sub-rect: x,y,w,h
 windeskctl capture --target win:12345 --max-width 1920 --out full.png        # raise the default cap
 windeskctl capture --target win:12345 --ocr --out shot.png                   # text + positions
+windeskctl capture --target win:12345 --ocr-filter Save --ocr-filter Cancel --out shot.png
 windeskctl capture --target win:12345 --format jpeg --quality 75 --out shot.jpg
 ```
 
@@ -19,7 +20,7 @@ Without `--out`, the CLI prints the frame rect and does **not** print the image 
 frame you never see is the bug this design prevents.
 
 MCP: tool `capture`, arguments `target`, `region`, `maxWidth`, `maxHeight`, `format`, `quality`,
-`ocr`. It returns the image as a viewable image block plus the frame info as text.
+`ocr`, `ocrFilter`. It returns the image as a viewable image block plus the frame info as text.
 
 **Prefer [`snapshot`](snapshot.md) over `capture` when the surface has an element tree** — you get named, clickable
 elements instead of pixels to reason about spatially. Reach for `capture` for canvases, video, games,
@@ -71,3 +72,9 @@ image still gets text read from the original. This is the tool for windows `snap
 into (GPU canvases, games, remote desktops); where a real element tree exists, `elem:` targets
 remain more reliable than OCR. Requires a Windows language pack with OCR support, which standard
 installs have.
+
+**Filter when you know what you're hunting.** Whole-window OCR of a text-dense surface is hundreds
+of lines. `--ocr-filter <text>` (repeatable) / `ocrFilter: [...]` (MCP) returns only the lines
+containing any given string, case-insensitively — matched lines come back whole, words included, so
+the click rect is still there. A filter implies OCR; no separate `ocr` flag needed. An **empty
+result is an answer**: that text is not on screen. Filters must be non-empty text.

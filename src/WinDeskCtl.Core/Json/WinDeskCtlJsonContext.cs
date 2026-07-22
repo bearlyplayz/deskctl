@@ -61,6 +61,7 @@ namespace WinDeskCtl.Core.Json;
 [JsonSerializable(typeof(CapturedImage))]
 [JsonSerializable(typeof(OcrLine))]
 [JsonSerializable(typeof(OcrWord))]
+[JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(List<Step>))]
 [JsonSerializable(typeof(InputRequest))]
 [JsonSerializable(typeof(InputResult))]

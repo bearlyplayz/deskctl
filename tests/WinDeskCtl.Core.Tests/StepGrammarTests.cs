@@ -207,6 +207,21 @@ public class StepGrammarTests
     }
 
     [Fact]
+    public void Capture_OcrFilter_TakesAnArrayOrABareString()
+    {
+        Step.Capture list = Assert.IsType<Step.Capture>(Parse<Step>(
+            """{"capture":{"target":"win:100","path":"C:/t/a.png","ocrFilter":["Save","Cancel"]}}"""));
+        Assert.Equal(["Save", "Cancel"], list.OcrFilter);
+
+        Step.Capture bare = Assert.IsType<Step.Capture>(Parse<Step>(
+            """{"capture":{"target":"win:100","path":"C:/t/a.png","ocrFilter":"Save"}}"""));
+        Assert.Equal(["Save"], bare.OcrFilter);
+
+        Assert.ThrowsAny<JsonException>(() => Parse<Step>(
+            """{"capture":{"target":"win:100","path":"C:/t/a.png","ocrFilter":[1]}}"""));
+    }
+
+    [Fact]
     public void Record_Parses_PresetAndBackground()
     {
         Step.Record s = Assert.IsType<Step.Record>(Parse<Step>("""

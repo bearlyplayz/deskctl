@@ -95,6 +95,12 @@ internal sealed class WinDeskCtlTools
             "click one via 'img:<handle>@x,y' at a rect's centre. Use for text targets in " +
             "UIA-blind apps; snapshot is still better where it works.")]
         bool ocr = false,
+        [Description(
+            "Return only OCR lines containing any of these strings (case-insensitive). Setting " +
+            "this implies ocr. Use it when hunting specific labels — full-window OCR of a " +
+            "text-dense surface is hundreds of lines you did not ask for. An empty result means " +
+            "the text is not on screen.")]
+        string[]? ocrFilter = null,
         CancellationToken ct = default)
         => await ReportingCallerErrors(async () =>
         {
@@ -107,7 +113,8 @@ internal sealed class WinDeskCtlTools
                     maxHeight,
                     ParseFormat(format),
                     quality,
-                    ocr),
+                    ocr,
+                    OcrFilter: ocrFilter),
                 ct);
 
             string info = WinDeskCtlJson.Serialize(new CaptureInfo(result.Image, result.Rect, result.Text));

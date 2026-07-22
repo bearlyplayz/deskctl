@@ -82,6 +82,28 @@ public class CaptureTypesTests
     }
 
     [Fact]
+    public void OcrFilters_KeepLinesMatchingAnyFilter_CaseInsensitively()
+    {
+        OcrLine save = new("Save changes", new CropBox(0, 0, 10, 10), []);
+        OcrLine cancel = new("Cancel", new CropBox(0, 20, 10, 10), []);
+        OcrLine other = new("Something else", new CropBox(0, 40, 10, 10), []);
+
+        Assert.Equal([save, cancel], OcrFilters.Apply([save, cancel, other], ["SAVE", "cancel"]));
+        Assert.Empty(OcrFilters.Apply([save, cancel, other], ["missing"]));
+        Assert.Equal([save, cancel, other], OcrFilters.Apply([save, cancel, other], null));
+    }
+
+    [Fact]
+    public void CaptureInput_AFilterImpliesOcr_AndBlankFiltersAreRejected()
+    {
+        Assert.True(new CaptureInput(new Frame.Virtual(), OcrFilter: ["Save"]).WantsOcr);
+        Assert.False(new CaptureInput(new Frame.Virtual()).WantsOcr);
+
+        // A whitespace filter matches every line — the full dump the filter was meant to prevent.
+        Assert.Throws<ArgumentException>(() => new CaptureInput(new Frame.Virtual(), OcrFilter: [" "]));
+    }
+
+    [Fact]
     public void Defaults_CapTheWidth_OnlyWhenNeitherAxisIsCapped()
     {
         Assert.Equal(CaptureDefaults.MaxWidth, CaptureDefaults.Apply(null, null));

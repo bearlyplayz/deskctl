@@ -223,6 +223,7 @@ by image coordinates. See [`capture`](capture.md) for the shared options.
 | `format` | `png` / `jpeg` | no | Default `png`. |
 | `quality` | integer | no | JPEG quality 1–100, default 90. Ignored for PNG. |
 | `ocr` | boolean | no | Recognize text; runs on the full-resolution pixels, rects come back in image coordinates. See [capture](capture.md#ocr). |
+| `ocrFilter` | string or array | no | Return only OCR lines containing any of these, case-insensitively. Implies `ocr`. |
 
 ```json
 {"capture":{"target":"win:123","path":"C:/t/before.png","ocr":true}}

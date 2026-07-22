@@ -39,7 +39,9 @@ public sealed class CaptureCommand : ICommand<CaptureInput, CaptureResult>, IDis
 
         // OCR reads the full-resolution pixels, not the downscaled output — downscaling degrades
         // recognition, and the rects come back in output units either way.
-        IReadOnlyList<OcrLine>? text = input.Ocr ? await OcrReader.ReadAsync(pixels, final.W) : null;
+        IReadOnlyList<OcrLine>? text = input.WantsOcr
+            ? OcrFilters.Apply(await OcrReader.ReadAsync(pixels, final.W), input.OcrFilter)
+            : null;
 
         string? image = input.MintFrame
             ? ImageFrames.Mint(final, input.Target is Frame.Window w ? (nint)w.Hwnd : 0)

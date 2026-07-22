@@ -214,7 +214,8 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
     {
         CaptureResult result = await capture.RunAsync(
             new CaptureInput(
-                step.Target, step.Region, step.MaxWidth, step.MaxHeight, step.Format, step.Quality, step.Ocr),
+                step.Target, step.Region, step.MaxWidth, step.MaxHeight, step.Format, step.Quality, step.Ocr,
+                OcrFilter: step.OcrFilter),
             ct);
 
         string? dir = Path.GetDirectoryName(Path.GetFullPath(step.Path));
