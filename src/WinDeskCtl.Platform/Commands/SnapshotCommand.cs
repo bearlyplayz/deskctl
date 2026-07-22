@@ -111,6 +111,10 @@ public sealed class SnapshotCommand : ICommand<SnapshotInput, SnapshotResult>
                 throw new NotSupportedException(
                     "A monitor is a region of pixels, not a UI tree. Snapshot a window, or use capture.");
 
+            case Frame.Image:
+                throw new NotSupportedException(
+                    "A captured image is pixels, not a UI tree. Snapshot the window it shows.");
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(target), $"Unhandled frame '{target}'.");
         }

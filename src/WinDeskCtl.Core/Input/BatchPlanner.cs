@@ -59,6 +59,8 @@ public static class BatchPlanner
                 case Step.Invoke:
                 case Step.Fill:
                 case Step.WaitFor:
+                case Step.Capture:
+                case Step.Record:
                     Flush();
                     ops.Add(new PlannedOp.Semantic(step));
                     break;

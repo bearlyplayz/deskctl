@@ -2,6 +2,7 @@ using System.Diagnostics;
 using WinDeskCtl.Core.Capture;
 using WinDeskCtl.Core.Commands;
 using WinDeskCtl.Core.Frames;
+using WinDeskCtl.Platform.Capture;
 
 namespace WinDeskCtl.Platform.Commands;
 
@@ -24,8 +25,11 @@ public sealed class RecordCommand : ICommand<RecordInput, RecordResult>, IDispos
 
         Directory.CreateDirectory(input.OutputDir);
 
+        // MintFrame off: the burst's frames share one rect, so one img: frame is minted for the
+        // whole burst below rather than one per file.
         CaptureInput shot = new(
-            input.Target, input.Region, input.MaxWidth, input.MaxHeight, input.Format, input.Quality);
+            input.Target, input.Region, input.MaxWidth, input.MaxHeight, input.Format, input.Quality,
+            MintFrame: false);
         string ext = input.Format == ImageFormat.Jpeg ? "jpg" : "png";
         int pad = (frames - 1).ToString().Length;
 
@@ -55,7 +59,10 @@ public sealed class RecordCommand : ICommand<RecordInput, RecordResult>, IDispos
             files.Add(path);
         }
 
-        return new RecordResult(rect!, input.Format, files);
+        string image = ImageFrames.Mint(
+            rect!, input.Target is Frame.Window w ? (nint)w.Hwnd : 0);
+
+        return new RecordResult(rect!, input.Format, files, image);
     }
 
     public void Dispose() => _capture.Dispose();

@@ -37,7 +37,15 @@ public sealed class CaptureCommand : ICommand<CaptureInput, CaptureResult>, IDis
 
         byte[] bytes = await ImageEncoder.EncodeAsync(pixels, input.Format, input.Quality, final.W, final.H);
 
-        return new CaptureResult(final, input.Format, bytes);
+        // OCR reads the full-resolution pixels, not the downscaled output — downscaling degrades
+        // recognition, and the rects come back in output units either way.
+        IReadOnlyList<OcrLine>? text = input.Ocr ? await OcrReader.ReadAsync(pixels, final.W) : null;
+
+        string? image = input.MintFrame
+            ? ImageFrames.Mint(final, input.Target is Frame.Window w ? (nint)w.Hwnd : 0)
+            : null;
+
+        return new CaptureResult(final, input.Format, bytes, image, text);
     }
 
     private async Task<(Bgra, FrameRect)> AcquireAsync(Frame target, CancellationToken ct)
@@ -78,6 +86,11 @@ public sealed class CaptureCommand : ICommand<CaptureInput, CaptureResult>, IDis
             case Frame.Element:
                 throw new NotSupportedException(
                     "Element capture requires the UIA tier. Capture the containing window and crop with --region.");
+
+            case Frame.Image:
+                throw new NotSupportedException(
+                    "An img: frame is a past capture, not a live surface. Capture the window or " +
+                    "monitor it shows.");
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(target), $"Unhandled frame '{target}'.");

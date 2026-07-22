@@ -172,4 +172,22 @@ public class BatchPlannerTests
         Assert.Empty(p.Ops);
         Assert.Empty(p.AutoReleased);
     }
+
+    [Fact]
+    public void CaptureAndRecord_AreSemanticOps_AndFlushWhatPrecedesThem()
+    {
+        // Both must see the desktop as the steps before them left it, so pending events are
+        // committed first; neither is expressible as a SendInput entry.
+        Step capture = new Step.Capture(new Frames.Frame.Window(100), "C:/t/a.png");
+        Step record = new Step.Record(new Frames.Frame.Window(100), "C:/t/burst");
+
+        Plan p = BatchPlanner.Plan([Down("ctrl"), capture, record, Up("ctrl")]);
+
+        Assert.Collection(p.Ops,
+            op => Assert.Single(Assert.IsType<PlannedOp.Send>(op).Steps),
+            op => Assert.Same(capture, Assert.IsType<PlannedOp.Semantic>(op).Step),
+            op => Assert.Same(record, Assert.IsType<PlannedOp.Semantic>(op).Step),
+            op => Assert.Single(Assert.IsType<PlannedOp.Send>(op).Steps));
+        Assert.Empty(p.AutoReleased);
+    }
 }

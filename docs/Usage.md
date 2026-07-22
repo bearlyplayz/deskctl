@@ -44,6 +44,7 @@ an image and a click can never disagree about which space they mean:
 | `monitor:<id>` | A monitor. Get ids from [`doctor`](doctor.md). |
 | `win:<hwnd>` | A window. Get hwnds from [`windows`](windows.md). |
 | `elem:<handle>` | A UI element. Get handles from [`snapshot`](snapshot.md). |
+| `img:<handle>` | A captured image. Minted by [`capture`](capture.md); a point in it is a pixel coordinate read off that image, and windeskctl applies the capture's scale. |
 
 **A point is `<frame>@<x>,<y>`**, or just `<frame>` on its own for that frame's centre. So
 `win:12345@400,200` is 400,200 measured from that window's top-left; `elem:btn-save` is the centre of
@@ -59,11 +60,11 @@ hand-computed coordinates work on your desk and break on someone else's. Let win
 **Run [`doctor`](doctor.md) first when coordinates behave unexpectedly.** Display topology, DPI, and
 drag thresholds are measured on the live machine, never assumed.
 
-**Element handles are process-scoped.** `elem:` handles are minted by [`snapshot`](snapshot.md) and
-live only in the process that minted them. One MCP session is one process, so handles persist across
-tool calls. Each CLI invocation is its own process, so a handle from `windeskctl snapshot` is already
-dead when a separate `windeskctl input` runs — use `input --snapshot <target>` to do both in one
-process.
+**Element and image handles are process-scoped.** `elem:` handles are minted by
+[`snapshot`](snapshot.md), `img:` handles by [`capture`](capture.md), and both live only in the
+process that minted them. One MCP session is one process, so handles persist across tool calls.
+Each CLI invocation is its own process, so a handle from `windeskctl snapshot` is already dead when
+a separate `windeskctl input` runs — use `input --snapshot <target>` to do both in one process.
 
 ---
 

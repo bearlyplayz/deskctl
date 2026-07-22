@@ -80,4 +80,16 @@ public class CaptureTypesTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new CaptureInput(new Frame.Virtual(), MaxWidth: 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new CaptureInput(new Frame.Virtual(), MaxHeight: -1));
     }
+
+    [Fact]
+    public void Defaults_CapTheWidth_OnlyWhenNeitherAxisIsCapped()
+    {
+        Assert.Equal(CaptureDefaults.MaxWidth, CaptureDefaults.Apply(null, null));
+
+        // An explicit cap on either axis is the caller's geometry; adding a second cap they did
+        // not ask for would change it.
+        Assert.Equal(800, CaptureDefaults.Apply(800, null));
+        Assert.Equal(800, CaptureDefaults.Apply(800, 600));
+        Assert.Null(CaptureDefaults.Apply(null, 600));
+    }
 }

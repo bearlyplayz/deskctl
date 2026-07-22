@@ -150,4 +150,91 @@ public class StepGrammarTests
             s => Assert.IsType<Step.Press>(s),
             s => Assert.IsType<Step.Up>(s));
     }
+
+    [Fact]
+    public void Capture_Parses_EveryField()
+    {
+        Step.Capture s = Assert.IsType<Step.Capture>(Parse<Step>("""
+            {"capture":{"target":"win:100","path":"C:/t/a.png","region":"10,20,300,200",
+                        "maxWidth":800,"format":"jpeg","quality":70,"ocr":true}}
+            """));
+
+        Assert.Equal(new Frames.Frame.Window(100), s.Target);
+        Assert.Equal("C:/t/a.png", s.Path);
+        Assert.Equal(new Capture.CropBox(10, 20, 300, 200), s.Region);
+        Assert.Equal(800, s.MaxWidth);
+        Assert.Equal(Capture.ImageFormat.Jpeg, s.Format);
+        Assert.Equal(70, s.Quality);
+        Assert.True(s.Ocr);
+    }
+
+    [Fact]
+    public void Capture_WithNoCap_DefaultsTheWidthCap()
+    {
+        // Resolved at parse time so the step records the cap it will actually run with — a
+        // defaulted cap that only materialized at execution would be invisible to the planner's
+        // tests and to anyone reading the parsed batch.
+        Step.Capture s = Assert.IsType<Step.Capture>(
+            Parse<Step>("""{"capture":{"target":"win:100","path":"C:/t/a.png"}}"""));
+
+        Assert.Equal(Capture.CaptureDefaults.MaxWidth, s.MaxWidth);
+        Assert.False(s.Ocr);
+    }
+
+    [Fact]
+    public void Capture_WithAHeightCapOnly_GetsNoWidthDefault()
+    {
+        Step.Capture s = Assert.IsType<Step.Capture>(
+            Parse<Step>("""{"capture":{"target":"win:100","path":"C:/t/a.png","maxHeight":600}}"""));
+
+        Assert.Null(s.MaxWidth);
+        Assert.Equal(600, s.MaxHeight);
+    }
+
+    [Fact]
+    public void Capture_WithoutAPath_Throws()
+    {
+        Assert.ThrowsAny<JsonException>(() => Parse<Step>("""{"capture":{"target":"win:100"}}"""));
+    }
+
+    [Fact]
+    public void Capture_WithANonBooleanOcr_Throws()
+    {
+        // A silently-false "true"-the-string would run without OCR while the caller believes
+        // it asked for it.
+        Assert.ThrowsAny<JsonException>(() => Parse<Step>(
+            """{"capture":{"target":"win:100","path":"C:/t/a.png","ocr":"true"}}"""));
+    }
+
+    [Fact]
+    public void Record_Parses_PresetAndBackground()
+    {
+        Step.Record s = Assert.IsType<Step.Record>(Parse<Step>("""
+            {"record":{"target":"win:100","outputDir":"C:/t/burst","preset":"slow","background":true}}
+            """));
+
+        Assert.Equal(Capture.RecordPreset.Slow, s.Preset);
+        Assert.True(s.Background);
+    }
+
+    [Fact]
+    public void Record_StaysUncappedByDefault()
+    {
+        // The capture default cap is deliberate about NOT applying here: burst frames are
+        // already bounded by preset, and sampling motion wants the source resolution unless the
+        // caller says otherwise.
+        Step.Record s = Assert.IsType<Step.Record>(
+            Parse<Step>("""{"record":{"target":"win:100","outputDir":"C:/t/burst"}}"""));
+
+        Assert.Null(s.MaxWidth);
+        Assert.Null(s.MaxHeight);
+        Assert.False(s.Background);
+        Assert.Equal(Capture.RecordPreset.Fast, s.Preset);
+    }
+
+    [Fact]
+    public void Record_WithoutAnOutputDir_Throws()
+    {
+        Assert.ThrowsAny<JsonException>(() => Parse<Step>("""{"record":{"target":"win:100"}}"""));
+    }
 }

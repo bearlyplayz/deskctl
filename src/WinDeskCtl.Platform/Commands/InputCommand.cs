@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
+using WinDeskCtl.Core.Capture;
 using WinDeskCtl.Core.Commands;
 using WinDeskCtl.Core.Frames;
 using WinDeskCtl.Core.Input;
 using WinDeskCtl.Core.Uia;
+using WinDeskCtl.Platform.Capture;
 using WinDeskCtl.Platform.Displays;
 using WinDeskCtl.Platform.Input;
 using WinDeskCtl.Platform.Interop;
@@ -29,6 +31,14 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
         int sent = 0, flushes = 0;
         List<string> reResolved = [];
         FocusState focus = new(request.Focus);
+
+        List<CapturedImage> captured = [];
+        // Sequenced by step order rather than appended, because a background burst joins after
+        // every inline one regardless of where its step sat in the batch.
+        List<(int Seq, RecordResult Result)> bursts = [];
+        List<(int Seq, Task<RecordResult> Burst, RecordCommand Command)> background = [];
+        int recordSeq = 0;
+        CaptureCommand? capture = null;
 
         try
         {
@@ -111,9 +121,42 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
                         flushes++;
                         break;
 
+                    // One command per batch, created on the first capture step: its D3D device is
+                    // what costs, and a batch screenshotting before and after a drag should pay
+                    // for it once.
+                    case PlannedOp.Semantic { Step: Step.Capture cap }:
+                        capture ??= new CaptureCommand();
+                        captured.Add(await CaptureToFileAsync(capture, cap, ct));
+                        break;
+
+                    case PlannedOp.Semantic { Step: Step.Record rec }:
+                        {
+                            RecordCommand recorder = new();
+                            Task<RecordResult> burst = recorder.RunAsync(ToRecordInput(rec), ct);
+                            if (rec.Background)
+                            {
+                                // The batch continues while the burst films it; joined after the
+                                // loop, and in the finally when the batch throws.
+                                background.Add((recordSeq++, burst, recorder));
+                            }
+                            else
+                            {
+                                using (recorder) bursts.Add((recordSeq++, await burst));
+                            }
+                        }
+                        break;
+
                     default:
                         throw new InvalidOperationException($"Unhandled op {op.GetType().Name}.");
                 }
+            }
+
+            // Background bursts outlive the steps they filmed; the result reports their files, so
+            // they are joined before it is built. A burst that failed surfaces here and unwinds
+            // the batch like any other failing op.
+            foreach ((int seq, Task<RecordResult> burst, _) in background)
+            {
+                bursts.Add((seq, await burst));
             }
         }
         catch (Exception ex)
@@ -135,12 +178,54 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
                 $"{ex.Message} Auto-released after the failure, newest first: " +
                 $"{string.Join(", ", released.Select(Describe))}.", ex);
         }
+        finally
+        {
+            foreach ((_, Task<RecordResult> burst, RecordCommand command) in background)
+            {
+                // On the failure path a burst may still be running. It is allowed to finish
+                // rather than be abandoned — its frames are precisely what a caller wants when
+                // diagnosing why the batch threw. Its own failure is secondary to the one
+                // already propagating, so it is not allowed to mask it.
+                try
+                {
+                    await burst;
+                }
+                catch
+                {
+                    // Reported on the success path by the join inside the try; here the batch's
+                    // own exception is already the answer.
+                }
+                command.Dispose();
+            }
+            capture?.Dispose();
+        }
 
         // Distinct: a batch may touch one element several times, and the caller's question is
         // which elements were found again rather than how often.
         return new InputResult(
-            sent, flushes, [.. plan.AutoReleased.Select(Describe)], [.. reResolved.Distinct()], focus.Taken);
+            sent, flushes, [.. plan.AutoReleased.Select(Describe)], [.. reResolved.Distinct()], focus.Taken,
+            captured, [.. bursts.OrderBy(b => b.Seq).Select(b => b.Result)]);
     }
+
+    /// <summary>Runs one capture step: pixels to disk, never into the result. The returned entry
+    /// carries the file's img: frame and rect so the caller — or a later step — can click into it.</summary>
+    private static async Task<CapturedImage> CaptureToFileAsync(
+        CaptureCommand capture, Step.Capture step, CancellationToken ct)
+    {
+        CaptureResult result = await capture.RunAsync(
+            new CaptureInput(
+                step.Target, step.Region, step.MaxWidth, step.MaxHeight, step.Format, step.Quality, step.Ocr),
+            ct);
+
+        string? dir = Path.GetDirectoryName(Path.GetFullPath(step.Path));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        await File.WriteAllBytesAsync(step.Path, result.Bytes, ct);
+
+        return new CapturedImage(step.Path, result.Image, result.Rect, result.Text);
+    }
+
+    private static RecordInput ToRecordInput(Step.Record rec) => new(
+        rec.Target, rec.OutputDir, rec.Preset, rec.Region, rec.MaxWidth, rec.MaxHeight, rec.Format, rec.Quality);
 
     /// <summary>Extracts the handle from an "elem:&lt;handle&gt;" reference. Semantic steps act on
     /// elements only — a coordinate has nothing to invoke.</summary>
@@ -241,6 +326,17 @@ public sealed class InputCommand : ICommand<InputRequest, InputResult>
 
             case Frame.Element e:
                 return ElementRectOf(e, reResolved, focus);
+
+            // The rect a capture recorded, scale included, so a coordinate read off the image
+            // lands without the caller converting image pixels to screen pixels. Deliberately NOT
+            // live: the image shows the target as it was, and that is the space the caller's
+            // coordinates are in. The window it showed is still focused, matching win: behaviour.
+            case Frame.Image i:
+                {
+                    (FrameRect rect, nint hwnd) = ImageFrames.Resolve(i.Handle);
+                    if (hwnd != 0) focus.Take(hwnd);
+                    return rect;
+                }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(frame));

@@ -37,6 +37,8 @@ is rejected loudly — a dropped step is worse than a rejected batch, because yo
 | `fill` | `{"fill":{"target":"elem:txt-search","value":"hello"}}` | Set an element's value directly. |
 | `waitFor` | `{"waitFor":{"target":"elem:dialog","timeout":"5s"}}` | Poll until an element exists, or time out. |
 | `delay` | `{"delay":{"duration":"200ms"}}` | Wait between steps. |
+| `capture` | `{"capture":{"target":"win:123","path":"C:/t/a.png"}}` | Screenshot to a file, mid-batch. |
+| `record` | `{"record":{"target":"win:123","outputDir":"C:/t/b","background":true}}` | Frame burst to a directory, mid-batch. |
 
 ## Shared property types
 
@@ -203,6 +205,61 @@ rather than letting later steps click at nothing. Use this after any step that t
 A `delay` also **breaks the batch's atomicity**: steps before and after it go out as separate OS
 calls, so other input can interleave. That is exactly what you want between two windows, and exactly
 what you do not want in the middle of a modifier combo.
+
+### `capture` — screenshot mid-batch
+
+Sees the desktop between two steps — before a click, after a fill — without ending the batch. The
+image goes to a **file, never into the response**; the result's `captured` list reports each file
+with its `img:` frame and rect, so you (or a later step in the same batch) can click what it shows
+by image coordinates. See [`capture`](capture.md) for the shared options.
+
+| Property | Type | Required | Notes |
+|---|---|---|---|
+| `target` | `win:<hwnd>` / `monitor:<id>` | **yes** | Fixed at parse; not a point, no `@`. |
+| `path` | string | **yes** | File to write. Directories are created as needed. |
+| `region` | `"x,y,w,h"` | no | Sub-rectangle, in the target's units. |
+| `maxWidth` | integer | no | Downscale cap. **Defaults to 1200** when neither cap is set; the rect's `scale` always reports the applied factor. |
+| `maxHeight` | integer | no | Downscale cap. |
+| `format` | `png` / `jpeg` | no | Default `png`. |
+| `quality` | integer | no | JPEG quality 1–100, default 90. Ignored for PNG. |
+| `ocr` | boolean | no | Recognize text; runs on the full-resolution pixels, rects come back in image coordinates. See [capture](capture.md#ocr). |
+
+```json
+{"capture":{"target":"win:123","path":"C:/t/before.png","ocr":true}}
+```
+
+Blocks only for the screenshot itself. Capturing does **not** focus the target — it can see
+occluded windows, and a mid-drag capture must not move the foreground.
+
+### `record` — film the batch's own steps
+
+Writes a burst of frames to a directory, mid-batch. Two modes:
+
+- **`background: false`** (default) — the full burst runs before the next step. For watching the
+  app react to the step *before* it: click, then record the animation the click started.
+- **`background: true`** — the burst starts and the batch continues, so the frames film what the
+  *following* steps do: a drag in progress, a hover state, an animation being driven. The batch
+  waits for the burst to finish before returning — and when the batch throws, the burst is still
+  allowed to finish, because its frames are exactly what shows why the batch failed.
+
+| Property | Type | Required | Notes |
+|---|---|---|---|
+| `target` | `win:<hwnd>` / `monitor:<id>` | **yes** | |
+| `outputDir` | string | **yes** | Created if absent. Frames are `frame_NNN` files in capture order. |
+| `preset` | `slow` / `medium` / `fast` / `instant` | no | Rate/duration pairing, ≤30 frames. Default `fast`. See [record](record.md). |
+| `background` | boolean | no | Default `false`. |
+| `region` / `maxWidth` / `maxHeight` / `format` / `quality` | | no | As on `capture`, except **no default width cap** — burst frames keep source resolution unless capped. |
+
+```json
+[{"record":{"target":"win:123","outputDir":"C:/t/drag","preset":"medium","background":true}},
+ {"move":{"to":"elem:slider"}},
+ {"down":{"button":"left"}},
+ {"move":{"to":"win:123@600,200","over":"1.5s"}},
+ {"up":{"button":"left"}}]
+```
+
+The result's `recorded` list reports each burst's files, rect, and `img:` frame — one frame for
+the whole burst, because every frame shares the same rect.
 
 ## Rules that bite
 

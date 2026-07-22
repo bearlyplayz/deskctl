@@ -1,3 +1,6 @@
+using WinDeskCtl.Core.Capture;
+using WinDeskCtl.Core.Frames;
+
 namespace WinDeskCtl.Core.Input;
 
 public enum MouseButton { Left, Right, Middle, X1, X2 }
@@ -51,7 +54,47 @@ public abstract record Step
     public sealed record WaitFor(string Target, TimeSpan Timeout) : Step;
 
     public sealed record Delay(TimeSpan Duration) : Step;
+
+    /// <summary>
+    /// Screenshots mid-batch, written to <paramref name="Path"/> — never returned inline. Blocks
+    /// only for the screenshot itself. The batch result reports the file with its img: frame, so
+    /// a later step in the same batch can click into it.
+    /// </summary>
+    /// <param name="Ocr">Recognize text in the capture; the batch result carries it with the file.</param>
+    public sealed record Capture(
+        Frame Target,
+        string Path,
+        CropBox? Region = null,
+        int? MaxWidth = null,
+        int? MaxHeight = null,
+        ImageFormat Format = ImageFormat.Png,
+        int Quality = 90,
+        bool Ocr = false) : Step;
+
+    /// <summary>
+    /// A burst of frames written to <paramref name="OutputDir"/> mid-batch.
+    /// </summary>
+    /// <param name="Background">False runs the full burst before the next step — for watching
+    /// the app react to the step before it. True starts the burst and lets the batch continue,
+    /// so the frames capture what the following steps do — a drag, an animation being driven.
+    /// The batch joins every outstanding burst before returning, and on failure, so the frames
+    /// of a batch that threw are still on disk.</param>
+    public sealed record Record(
+        Frame Target,
+        string OutputDir,
+        RecordPreset Preset = RecordPreset.Fast,
+        bool Background = false,
+        CropBox? Region = null,
+        int? MaxWidth = null,
+        int? MaxHeight = null,
+        ImageFormat Format = ImageFormat.Png,
+        int Quality = 90) : Step;
 }
+
+/// <summary>A file a capture step wrote, with everything needed to click back into it: the img:
+/// frame, its rect (origin, size in image pixels, scale), and OCR text when requested.</summary>
+public sealed record CapturedImage(
+    string Path, string? Image, FrameRect Rect, IReadOnlyList<OcrLine>? Text);
 
 /// <param name="Focus">Whether naming a window or element target brings that window to the
 /// foreground before injecting at it. On by default, because keyboard events go to whatever holds
@@ -72,9 +115,16 @@ public sealed record InputRequest(IReadOnlyList<Step> Steps, bool Focus = true);
 /// handle twice means something took the foreground back mid-batch, which is the difference
 /// between a step that misbehaved and a step whose events went somewhere else entirely. That
 /// distinction is invisible in a screenshot of the app you meant to drive.</param>
+/// <param name="Captured">Files the batch's capture steps wrote, in step order. Empty when the
+/// batch had none.</param>
+/// <param name="Recorded">Bursts the batch's record steps wrote, in step order — including
+/// background bursts, which are joined before the result is built. Empty when the batch had
+/// none.</param>
 public sealed record InputResult(
     int EventsSent,
     int Flushes,
     IReadOnlyList<string> Released,
     IReadOnlyList<string> ReResolved,
-    IReadOnlyList<long> Focused);
+    IReadOnlyList<long> Focused,
+    IReadOnlyList<CapturedImage> Captured,
+    IReadOnlyList<RecordResult> Recorded);

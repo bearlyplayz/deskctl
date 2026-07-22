@@ -38,6 +38,18 @@ public abstract record Frame
         public override string ToString() => $"elem:{Handle}";
     }
 
+    /// <summary>
+    /// A captured image. The handle is an opaque session-scoped token minted by a capture; a
+    /// point in this frame is a pixel coordinate read directly off that image, and translation
+    /// applies the capture's recorded scale — the caller never converts image pixels to screen
+    /// pixels itself. The rect describes where the target was at capture time, so a window that
+    /// moves afterwards makes the frame stale. Callers must not construct these.
+    /// </summary>
+    public sealed record Image(string Handle) : Frame
+    {
+        public override string ToString() => $"img:{Handle}";
+    }
+
     public static bool TryParse(string s, out Frame? frame)
     {
         frame = null;
@@ -67,6 +79,9 @@ public abstract record Frame
             case "elem":
                 frame = new Element(arg);
                 return true;
+            case "img":
+                frame = new Image(arg);
+                return true;
             default:
                 return false;
         }
@@ -76,5 +91,6 @@ public abstract record Frame
         TryParse(s, out Frame? f) && f is not null
             ? f
             : throw new FormatException(
-                $"'{s}' is not a frame. Expected 'virtual', 'monitor:<id>', 'win:<hwnd>', or 'elem:<handle>'.");
+                $"'{s}' is not a frame. Expected 'virtual', 'monitor:<id>', 'win:<hwnd>', " +
+                "'elem:<handle>', or 'img:<handle>'.");
 }

@@ -118,7 +118,9 @@ internal static class CliRoot
         };
         Option<int?> maxWidthOption = new("--max-width")
         {
-            Description = "Downscale so width does not exceed this. Sets scale in the result.",
+            Description =
+                "Downscale so width does not exceed this. Defaults to 1200 when neither cap is " +
+                "set; pass a larger value for full resolution. Sets scale in the result.",
         };
         Option<int?> maxHeightOption = new("--max-height")
         {
@@ -138,23 +140,32 @@ internal static class CliRoot
         {
             Description = "Write the image here. Without it, the frame rect is printed and the image is not.",
         };
+        Option<bool> ocrOption = new("--ocr")
+        {
+            Description =
+                "Recognize text in the capture and print each line and word with its rect, in " +
+                "image coordinates. Runs on the full-resolution pixels regardless of downscale.",
+        };
 
         Command capture = new("capture", "Capture pixels of a window or monitor")
         {
-            targetOption, regionOption, maxWidthOption, maxHeightOption, formatOption, qualityOption, outOption,
+            targetOption, regionOption, maxWidthOption, maxHeightOption,
+            formatOption, qualityOption, outOption, ocrOption,
         };
 
         capture.SetAction(async (parseResult, ct) =>
         {
             string? region = parseResult.GetValue(regionOption);
+            int? maxHeight = parseResult.GetValue(maxHeightOption);
 
             CaptureInput input = new(
                 Target: Frame.Parse(parseResult.GetValue(targetOption)!),
                 Region: string.IsNullOrEmpty(region) ? null : CropBox.Parse(region),
-                MaxWidth: parseResult.GetValue(maxWidthOption),
-                MaxHeight: parseResult.GetValue(maxHeightOption),
+                MaxWidth: CaptureDefaults.Apply(parseResult.GetValue(maxWidthOption), maxHeight),
+                MaxHeight: maxHeight,
                 Format: ParseFormat(parseResult.GetValue(formatOption)),
-                Quality: parseResult.GetValue(qualityOption));
+                Quality: parseResult.GetValue(qualityOption),
+                Ocr: parseResult.GetValue(ocrOption));
 
             using CaptureCommand command = new();
             CaptureResult result = await command.RunAsync(input, ct);
@@ -170,7 +181,13 @@ internal static class CliRoot
             Console.WriteLine(
                 $"frame {result.Rect.Frame}  origin {result.Rect.OriginX},{result.Rect.OriginY}  " +
                 $"size {result.Rect.W}x{result.Rect.H}  scale {result.Rect.Scale}  " +
-                $"{result.Format.ToString().ToLowerInvariant()} {result.Bytes.Length} bytes");
+                $"{result.Format.ToString().ToLowerInvariant()} {result.Bytes.Length} bytes  " +
+                $"{result.Image}");
+
+            foreach (OcrLine line in result.Text ?? [])
+            {
+                Console.WriteLine($"  {line.Rect.X},{line.Rect.Y} {line.Rect.W}x{line.Rect.H}  {line.Text}");
+            }
 
             return 0;
         });
@@ -244,7 +261,7 @@ internal static class CliRoot
             Console.WriteLine(
                 $"frame {result.Rect.Frame}  origin {result.Rect.OriginX},{result.Rect.OriginY}  " +
                 $"size {result.Rect.W}x{result.Rect.H}  scale {result.Rect.Scale}  " +
-                $"{result.Files.Count} frames");
+                $"{result.Files.Count} frames  {result.Image}");
             foreach (string path in result.Files)
             {
                 Console.WriteLine(path);
@@ -555,6 +572,20 @@ internal static class CliRoot
                     ? $"focused: {windows}"
                     : $"focused: {windows} — a repeat means something took the foreground back " +
                       "mid-batch; steps before it landed elsewhere.");
+            }
+
+            foreach (CapturedImage c in result.Captured)
+            {
+                Console.WriteLine(
+                    $"captured {c.Path}  {c.Image}  size {c.Rect.W}x{c.Rect.H}  scale {c.Rect.Scale}" +
+                    (c.Text is null ? "" : $"  {c.Text.Count} text line(s)"));
+            }
+
+            foreach (RecordResult r in result.Recorded)
+            {
+                Console.WriteLine(
+                    $"recorded {r.Files.Count} frame(s)  {r.Image}  size {r.Rect.W}x{r.Rect.H}  " +
+                    $"scale {r.Rect.Scale}  {Path.GetDirectoryName(r.Files[0])}");
             }
 
             return 0;

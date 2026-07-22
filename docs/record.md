@@ -4,7 +4,9 @@
 
 Captures a short burst of frames to disk, one file per frame, so a caller can see motion a single
 `capture` cannot show — a spinner turning, a progress bar filling, a video playing, a transition.
-It's [`capture`](capture.md) run on a schedule; every option `capture` takes, `record` takes too. It writes ordered
+It's [`capture`](capture.md) run on a schedule; every option `capture` takes, `record` takes too —
+except capture's default width cap: burst frames keep source resolution unless capped, because
+sampling motion is the one place detail beats token cost. It writes ordered
 `frame_NNN` files — zero-padded to the burst's own frame count, so `fast` gives `frame_0`…`frame_8`
 and a 30-frame preset gives `frame_00`…`frame_29` — and returns the **list of paths, not the images**.
 
@@ -40,3 +42,9 @@ reports the crop's own coordinate space, same as `capture`.
 **If every frame looks identical, the region is static — or you sampled it at its own cycle.** An
 animation whose period lines up with the sampling rate lands on the same phase each frame and reads as
 frozen. Re-run with a different preset to break the alignment.
+
+**Every frame shares one rect and one [`img:` frame](capture.md#click-what-you-see-img-frames)** —
+the target and region are fixed for the whole burst, so a point read off any frame is clickable as
+`img:<handle>@x,y` in the [`input`](input.md) tool. To record *while* input runs — filming a drag
+the same batch performs — use the `record` step inside
+[`input`](input.md#record--film-the-batchs-own-steps) with `background: true`.

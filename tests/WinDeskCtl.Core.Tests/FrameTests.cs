@@ -42,10 +42,19 @@ public class FrameTests
     [InlineData("win:")]              // empty hwnd
     [InlineData("win:notanumber")]
     [InlineData("elem:")]             // empty handle
+    [InlineData("img:")]              // empty handle
     [InlineData("virtual:1")]         // virtual takes no argument
     public void Parse_Malformed_Throws(string wire)
     {
         Assert.Throws<FormatException>(() => Frame.Parse(wire));
+    }
+
+    [Fact]
+    public void Image_RoundTripsThroughTheWireForm()
+    {
+        Frame.Image i = Assert.IsType<Frame.Image>(Frame.Parse("img:3"));
+        Assert.Equal("3", i.Handle);
+        Assert.Equal("img:3", i.ToString());
     }
 
     [Fact]

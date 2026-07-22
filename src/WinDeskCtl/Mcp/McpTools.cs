@@ -66,15 +66,20 @@ internal sealed class WinDeskCtlTools
     [McpServerTool(Name = "capture")]
     [Description(
         "Capture pixels of a window or monitor, including when it is occluded or hardware-" +
-        "accelerated. Returns the image together with the frame rect describing its coordinate " +
-        "space — feed that rect back when clicking so the click lands where you saw it. Use this " +
-        "for canvases, video, and games that have no element tree.")]
+        "accelerated. Returns the image, an 'img:' frame, and the rect describing its coordinate " +
+        "space. Click what you see by its IMAGE coordinates: a point read off the image is " +
+        "'img:<handle>@x,y' in the input tool — windeskctl applies the scale, so never convert " +
+        "pixels yourself. Uncapped captures default to maxWidth 1200; the rect's scale always " +
+        "reports the applied factor. Use this for canvases, video, and games that have no " +
+        "element tree; prefer snapshot elsewhere.")]
     public static async Task<CallToolResult> CaptureAsync(
         [Description("What to capture: 'monitor:<id>' or 'win:<hwnd>'. Get monitor ids from the doctor tool.")]
         string target,
         [Description("Optional sub-rectangle within the target, as x,y,w,h.")]
         string? region = null,
-        [Description("Downscale so width does not exceed this. The result's scale records the factor.")]
+        [Description(
+            "Downscale so width does not exceed this. Defaults to 1200 when neither cap is set; " +
+            "pass a larger value for full resolution. The result's scale records the factor.")]
         int? maxWidth = null,
         [Description("Downscale so height does not exceed this. The result's scale records the factor.")]
         int? maxHeight = null,
@@ -84,6 +89,12 @@ internal sealed class WinDeskCtlTools
         string format = "png",
         [Description("JPEG quality, 1-100. Ignored for PNG.")]
         int quality = 90,
+        [Description(
+            "Recognize text in the capture. Runs on the FULL-resolution pixels regardless of " +
+            "downscale, and returns each line and word with its rect in image coordinates — " +
+            "click one via 'img:<handle>@x,y' at a rect's centre. Use for text targets in " +
+            "UIA-blind apps; snapshot is still better where it works.")]
+        bool ocr = false,
         CancellationToken ct = default)
         => await ReportingCallerErrors(async () =>
         {
@@ -92,17 +103,18 @@ internal sealed class WinDeskCtlTools
                 new CaptureInput(
                     Frame.Parse(target),
                     string.IsNullOrEmpty(region) ? null : CropBox.Parse(region),
-                    maxWidth,
+                    CaptureDefaults.Apply(maxWidth, maxHeight),
                     maxHeight,
                     ParseFormat(format),
-                    quality),
+                    quality,
+                    ocr),
                 ct);
 
-            string rect = WinDeskCtlJson.Serialize(result.Rect);
+            string info = WinDeskCtlJson.Serialize(new CaptureInfo(result.Image, result.Rect, result.Text));
 
             // An image block rather than the result object: serializing CaptureResult would send
             // the pixels as a base64 string inside JSON text, which a vision model cannot see —
-            // and an unviewable image is the whole point of the tool missed. The rect rides
+            // and an unviewable image is the whole point of the tool missed. The frame info rides
             // alongside as its own text block, because an image without its coordinate frame is
             // the failure this design exists to prevent.
             return new CallToolResult
@@ -110,9 +122,9 @@ internal sealed class WinDeskCtlTools
                 Content =
                 [
                     ImageContentBlock.FromBytes(result.Bytes, result.MimeType),
-                    new TextContentBlock { Text = rect },
+                    new TextContentBlock { Text = info },
                 ],
-                StructuredContent = JsonDocument.Parse(rect).RootElement,
+                StructuredContent = JsonDocument.Parse(info).RootElement,
             };
         });
 
@@ -122,7 +134,9 @@ internal sealed class WinDeskCtlTools
         "loading, frozen, or done. Writes ordered frame_NNN files to outputDir and returns " +
         "their filenames, not the images; read them with your image tools (first/middle/last is " +
         "usually enough). Crop to the moving area with 'region'. The preset picks rate/duration " +
-        "(≤30 frames); identical frames mean static or mis-sampled — retry another preset.")]
+        "(≤30 frames); identical frames mean static or mis-sampled — retry another preset. All " +
+        "frames share one rect and one 'img:' frame — click a point read off any frame as " +
+        "'img:<handle>@x,y' in the input tool.")]
     public static async Task<CallToolResult> RecordAsync(
         [Description("What to capture: 'monitor:<id>' or 'win:<hwnd>'. Get monitor ids from the doctor tool.")]
         string target,
@@ -318,6 +332,13 @@ internal sealed class WinDeskCtlTools
           {"move":{"to":"win:123@400,200","over":"250ms","ease":"easeOut"}}
           {"scroll":{"dy":-3,"at":"elem:list"}}  {"text":"hi"}  {"invoke":{"target":"elem:x"}}
           {"fill":{"target":"elem:x","value":"y"}}  {"waitFor":{...}}  {"delay":{...}}
+        See mid-batch without leaving the batch — both save to disk, never inline:
+          {"capture":{"target":"win:123","path":"C:/t/before.png","ocr":true}}
+          {"record":{"target":"win:123","outputDir":"C:/t/drag","background":true}}
+        A capture blocks only for the screenshot; a record runs its preset burst first unless
+        "background":true, which films the FOLLOWING steps (a drag, an animation) while they run —
+        the batch waits for it at the end. The result's 'captured'/'recorded' report each file
+        with its img: frame; a later step in the same batch can click "img:<handle>@x,y".
         down/up/press need "key" OR "button" (tag required — 'left'/'right' are both). A point is
         "<frame>@<x>,<y>", or "<frame>" for its centre. Naming a win:/elem: target focuses that
         window and keeps re-asserting it, so no separate focus call is needed — aim at the window

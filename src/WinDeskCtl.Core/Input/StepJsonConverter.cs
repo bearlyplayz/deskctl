@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using WinDeskCtl.Core.Capture;
+using WinDeskCtl.Core.Frames;
 
 namespace WinDeskCtl.Core.Input;
 
@@ -61,9 +63,30 @@ public sealed class StepJsonConverter : JsonConverter<Step>
                 ReqString(body, "target", verb),
                 ReqDuration(body, "timeout")),
             "delay" => new Step.Delay(ReqDuration(body, "duration")),
+            "capture" => new Step.Capture(
+                Frame.Parse(ReqString(body, "target", verb)),
+                ReqString(body, "path", verb),
+                OptRegion(body),
+                // The default cap is resolved at parse time rather than left null, so the step
+                // records the cap it will actually run with.
+                CaptureDefaults.Apply(OptNullableInt(body, "maxWidth"), OptNullableInt(body, "maxHeight")),
+                OptNullableInt(body, "maxHeight"),
+                OptEnum(body, "format", ImageFormat.Png),
+                OptInt(body, "quality", 90),
+                OptBool(body, "ocr")),
+            "record" => new Step.Record(
+                Frame.Parse(ReqString(body, "target", verb)),
+                ReqString(body, "outputDir", verb),
+                OptEnum(body, "preset", RecordPreset.Fast),
+                OptBool(body, "background"),
+                OptRegion(body),
+                OptNullableInt(body, "maxWidth"),
+                OptNullableInt(body, "maxHeight"),
+                OptEnum(body, "format", ImageFormat.Png),
+                OptInt(body, "quality", 90)),
             _ => throw new JsonException(
                 $"'{verb}' is not a step. Expected one of: down, up, press, move, scroll, text, " +
-                "invoke, fill, waitFor, delay."),
+                "invoke, fill, waitFor, delay, capture, record."),
         };
 
         // Deserializing a concrete type is a claim about which verb the JSON holds; honour it
@@ -123,6 +146,24 @@ public sealed class StepJsonConverter : JsonConverter<Step>
 
     private static int OptInt(JsonElement e, string name, int fallback) =>
         e.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int i) ? i : fallback;
+
+    private static int? OptNullableInt(JsonElement e, string name) =>
+        e.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int i) ? i : null;
+
+    private static bool OptBool(JsonElement e, string name) =>
+        !e.TryGetProperty(name, out JsonElement v)
+            ? false
+            : v.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => throw new JsonException($"'{name}' must be a JSON boolean, not {v.ValueKind}."),
+            };
+
+    private static CropBox? OptRegion(JsonElement e) =>
+        e.TryGetProperty("region", out JsonElement v) && v.ValueKind == JsonValueKind.String
+            ? CropBox.Parse(v.GetString()!)
+            : null;
 
     private static TEnum OptEnum<TEnum>(JsonElement e, string name, TEnum fallback) where TEnum : struct, Enum
     {

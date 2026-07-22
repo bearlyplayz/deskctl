@@ -73,4 +73,8 @@ public sealed record RecordInput(
 /// caller can click into any frame using it. Paths are in capture order, matching the zero-padded
 /// <c>frame_NNN</c> names on disk.
 /// </summary>
-public sealed record RecordResult(FrameRect Rect, ImageFormat Format, IReadOnlyList<string> Files);
+/// <param name="Image">The minted img: frame shared by every frame of the burst — one frame, not
+/// one per file, because the rect is fixed for the whole burst. A point read off any frame is
+/// clickable as "img:&lt;handle&gt;@x,y". Session-scoped.</param>
+public sealed record RecordResult(
+    FrameRect Rect, ImageFormat Format, IReadOnlyList<string> Files, string? Image = null);
