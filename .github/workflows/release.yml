@@ -10,8 +10,6 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
-    outputs:
-      version: ${{ steps.version.outputs.value }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -32,26 +30,9 @@ jobs:
 
       - run: dotnet publish src/WinDeskCtl/WinDeskCtl.csproj -c Release -p:Version=${{ steps.version.outputs.value }} -o publish
 
+      # A release created with GITHUB_TOKEN raises no events, so an `on: release` workflow will
+      # not fire from this step — creating one requires switching this to a PAT.
       - shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create '${{ github.ref_name }}' publish/windeskctl.exe --generate-notes
-
-  # Submits an update PR to microsoft/winget-pkgs, forking it on first use. WINGET_TOKEN must be a
-  # classic PAT with `public_repo` scope; fine-grained tokens and GITHUB_TOKEN are both rejected.
-  # `update` only edits a package that already exists — the first version is submitted by hand.
-  # A release created with GITHUB_TOKEN raises no events, so `on: release` never fires here.
-  winget:
-    needs: release
-    if: vars.PUBLISH_WINGET == 'true'
-    runs-on: windows-latest
-    steps:
-      - shell: pwsh
-        env:
-          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
-        run: |
-          Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
-          .\wingetcreate.exe update WinDeskCtl.WinDeskCtl `
-            --version '${{ needs.release.outputs.version }}' `
-            --urls 'https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/windeskctl.exe' `
-            --submit --no-open --token $env:WINGET_TOKEN
