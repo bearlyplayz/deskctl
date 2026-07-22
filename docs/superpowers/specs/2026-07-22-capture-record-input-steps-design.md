@@ -32,6 +32,11 @@ ratio arithmetic constantly. The codebase already owns the correct conversion
    has no use case yet.
 5. **No separate OCR region.** Capture's existing `Region` already scopes both the image and the
    OCR that runs on it. One knob.
+6. **Capture downscales by default.** Optional knobs agents ignore are not fixes; defaults are.
+   With `img:` frames doing the scale arithmetic, downscaling no longer costs click accuracy, so
+   an uncapped capture defaults to `MaxWidth` 1200. Never silent: the result's rect always
+   reports the image's actual pixel dimensions and `scale`, whether the cap was defaulted or
+   explicit. An agent wanting full resolution passes a larger `maxWidth` — no new parameter.
 
 ## Step grammar (`Core/Input/Steps.cs`)
 
@@ -111,6 +116,17 @@ the window moves afterwards, the click lands where the pixels used to be — the
   click point when a line spans multiple targets ("File Edit View Help").
 - OCR is the fallback for windows UIA cannot see into (GPU-canvas UIs). For apps `snapshot` can
   read, `elem:` targets remain the better tool; the usage guide says so.
+
+## Default downscale (`Core/Capture/CaptureTypes.cs`)
+
+A `CaptureInput` with no `MaxWidth`/`MaxHeight` gets `MaxWidth` 1200. This is a token-cost
+policy default, not machine calibration — it is a named constant in Core, applied where
+`CaptureInput` is resolved so both surfaces and the capture step share it. The pairing that makes
+it safe: `img:` frames absorb the click-accuracy cost, and full-res OCR absorbs the small-text
+legibility cost. The default is never silent — the returned rect's `W`/`H` are the written
+image's pixel dimensions and `Scale` is the applied ratio, identically for defaulted and
+explicit caps. Record keeps no default cap: burst frames are already bounded by preset, and
+region-cropped motion is the documented usage.
 
 ## Plumbing that bites
 
